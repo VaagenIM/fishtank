@@ -1,3 +1,6 @@
+# Install choco upgrade all at startup, as well as a scheduled task to run it daily at 3 AM
+choco install choco-upgrade-all-at-startup -y
+
 # Define the task name and the command to run
 $taskName = "ChocoUpgradeAll"
 $command = "choco upgrade all -y"

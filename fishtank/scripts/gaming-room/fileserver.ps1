@@ -1,42 +1,37 @@
-# Define script content
-$batchContent = @"
-@echo off
-set user=guest
+# Ensure the script runs with administrative privileges
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Output "This script requires administrative privileges. Please run PowerShell as Administrator."
+    exit
+}
 
-:Start
-net use t: \\10.5.0.5\Transfer /user:\%user% ""
-net use r: \\10.5.0.5\Ressurser /user:\%user% ""
-if ERRORLEVEL 1 goto End
+# Define network drive mappings
+$Drives = @(
+    @{Letter="T"; Path="\\10.5.0.5\Transfer"; User="guest"; Password="" }
+    @{Letter="R"; Path="\\10.5.0.5\Ressurser"; User="guest"; Password="" }
+    @{Letter="S"; Path="\\10.5.0.5\Spill"; User="guest"; Password="" }
+)
 
-:End
-echo Kan ikke koble til Galtvort.
-pause
-"@
+# Iterate through each drive and map it
+foreach ($Drive in $Drives) {
+    # Remove existing drive mapping if present
+    if (Test-Path "$($Drive.Letter):\") {
+        Write-Output "Drive $($Drive.Letter): already mapped. Skipping..."
+    } else {
+        Write-Output "Mapping $($Drive.Letter): to $($Drive.Path)..."
+        net use "$($Drive.Letter):" "$($Drive.Path)" /user:"$($Drive.User)" "$($Drive.Password)" /persistent:yes
+    }
+}
 
-# Define file paths
-$batchFile = "C:\ProgramData\map_drives.bat"
-$taskName = "MapNetworkDrives"
+Write-Output "All drives mapped successfully."
 
-# Save batch file to a global location
-$batchContent | Set-Content -Path $batchFile -Encoding ASCII
+# Ensure the script runs at login for all users by adding it to the registry
+$ScriptPath = "C:\ProgramData\map_drives.ps1"
+$RegPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
 
-# Set proper permissions (allows all users to read/execute)
-icacls $batchFile /grant "Users:RX" /T /C
+if (!(Test-Path $RegPath)) {
+    New-Item -Path $RegPath -Force
+}
 
-# Create a scheduled task to run for all users at logon
-$action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$batchFile`""
-$trigger = New-ScheduledTaskTrigger -AtLogOn
+Set-ItemProperty -Path $RegPath -Name "MapNetworkDrives" -Value "powershell -ExecutionPolicy Bypass -File `"$ScriptPath`""
 
-# Use the "INTERACTIVE" user for logon type (so it runs for interactive users)
-$principal = New-ScheduledTaskPrincipal -UserId "Vaagen" -LogonType Interactive
-
-# Create the task object
-$task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Description "Maps network drives on startup"
-
-# Register the task
-Register-ScheduledTask -TaskName $taskName -InputObject $task -Force
-
-# Run the task immediately
-Start-ScheduledTask -TaskName $taskName
-
-Write-Output "Startup script added for all users!"
+Write-Output "Logon script registered in Windows Registry to run at startup for all users."

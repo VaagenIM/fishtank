@@ -42,22 +42,26 @@ if (Test-Path $blacklistFile) {
 
 function install_choco_packages($file) {
     Write-Output "Installing packages from $file..."
-    Get-Content $file | ForEach-Object {
-        if ($_ -notmatch "^#|^$") {
-            if ((choco list -r --id-only $_) -eq "")
-            {
-                Write-Output "Installing $_..."
-                powershell -Command "choco install -y $_"
-            }
-            else
-            {
-                Write-Output "$_ is already installed. Skipping installation..."
-            }
-            # If the package is in the blacklist, pin it
-            if ($blacklist -contains $_) {
-                Write-Output "Pinning $_ to suppress upgrades..."
-                choco pin add -n $_
-            }
+
+    Get-Content $file | Where-Object {
+        ($_ -notmatch "^#|^$") -and ($_ -match "\S")
+    } | ForEach-Object {
+        $packageName = $_.Trim()
+
+        # Check if package is already installed
+        $isInstalled = choco list --local-only | Select-String "^$packageName\s"
+
+        if (-not $isInstalled) {
+            Write-Output "Installing $packageName..."
+            choco install -y $packageName
+        } else {
+            Write-Output "$packageName is already installed. Skipping installation..."
+        }
+
+        # If the package is in the blacklist, pin it
+        if ($blacklist -contains $packageName) {
+            Write-Output "Pinning $packageName to suppress upgrades..."
+            choco pin add -n $packageName
         }
     }
 }
@@ -105,9 +109,6 @@ if ($install_dev) {
 
 if ($install_gaming_room) {
     install_choco_packages_recursive "apps/gaming-room"
-    # We need to run the user script first to create the user
-    Unblock-File -Path "scripts/gaming-room/user.ps1"
-    & "scripts/gaming-room/user.ps1"
     execute_scripts_recursive "scripts/gaming-room"
 }
 

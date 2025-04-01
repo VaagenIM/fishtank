@@ -2,16 +2,9 @@
 Write-Output "Enabling Developer Mode..."
 reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
 
-# Enable ExecutionPolicy to Unrestricted (Allows for scripts to run without signing)
-# i.e. Python Venv scripts and other scripts
-Set-ExecutionPolicy Unrestricted -Force
-
-# Install WSL, if it is not already installed
-if (Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux | Where-Object { $_.State -eq "Enabled" }) {
-    Write-Output "WSL is already installed. Skipping installation..."
-} else {
-    wsl --install
-}
+# Enable execution of PowerShell scripts
+Write-Output "Enabling execution of PowerShell scripts..."
+Set-ExecutionPolicy Unrestricted -Scope CurrentUser -Force
 
 # https://chocolatey.org/install
 if (Get-Command choco -ErrorAction SilentlyContinue) {
