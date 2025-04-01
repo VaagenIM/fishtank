@@ -28,7 +28,7 @@ $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$batchFile`
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 
 # Use the "INTERACTIVE" user for logon type (so it runs for interactive users)
-$principal = New-ScheduledTaskPrincipal -UserId "INTERACTIVE" -LogonType Interactive
+$principal = New-ScheduledTaskPrincipal -UserId "Vaagen" -LogonType Interactive
 
 # Create the task object
 $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Description "Maps network drives on startup"

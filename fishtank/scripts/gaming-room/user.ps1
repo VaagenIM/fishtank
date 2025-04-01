@@ -16,6 +16,7 @@ if ($user) {
 
         # Add to the 'Users' group (non-admin)
         Add-LocalGroupMember -Group "Users" -Member $Username
+        Add-LocalGroupMember -Group "Brukere" -Member $Username
         Write-Output "User '$Username' added to 'Users' group."
 
     } catch {
@@ -34,11 +35,11 @@ Write-Output "Password change restrictions applied."
 
 # Define the source and destination of the wallpaper
 $SourceWallpaper = "assets\gaming-room\wallpaper.jpg"
-$DestinationWallpaper = "C:\ProgramData\gaming-room\wallpaper.jpg"
+$DestinationWallpaper = "C:\ProgramData\wallpaper.jpg"
 
 # Copy the wallpaper to the hidden ProgramData folder
 Copy-Item -Path $SourceWallpaper -Destination $DestinationWallpaper -Force
-Write-Output "Wallpaper copied to C:\ProgramData\gaming-room\wallpaper.jpg"
+Write-Output "Wallpaper copied to C:\ProgramData\wallpaper.jpg"
 
 # Set the default wallpaper using the copied file
 Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name Wallpaper -Value $DestinationWallpaper

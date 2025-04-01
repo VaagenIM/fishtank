@@ -84,6 +84,7 @@ function execute_scripts_recursive($directory) {
         # Get all .ps1 script files in the directory
         Get-ChildItem -Path $directory -Filter "*.ps1" | ForEach-Object {
             Write-Output "Running script: $($_.FullName)..."
+            Unblock-File -Path $_.FullName  # Unblock the script
             & $_.FullName  # Executes the script
         }
     } else {
@@ -105,6 +106,9 @@ if ($install_dev) {
 
 if ($install_gaming_room) {
     install_choco_packages_recursive "apps/gaming-room"
+    # We need to run the user script first to create the user
+    Unblock-File -Path "scripts/gaming-room/user.ps1"
+    & "scripts/gaming-room/user.ps1"
     execute_scripts_recursive "scripts/gaming-room"
 }
 
