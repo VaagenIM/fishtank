@@ -114,3 +114,8 @@ if ($install_gaming_room) {
 }
 
 Write-Output "Fishtank is set up!"
+
+# Log out in 5 seconds
+Write-Output "Logging out in 5 seconds..."
+Start-Sleep -Seconds 5
+shutdown /l
