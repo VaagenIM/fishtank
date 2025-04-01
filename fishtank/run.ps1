@@ -17,20 +17,10 @@ $set_password = yn_prompt "Set a password for this admin account?"
 
 if ($set_password) {
     $pw = Read-Host -AsSecureString -Prompt "Enter a password"
-    $pw_confirm = Read-Host -AsSecureString -Prompt "Confirm the password"
-
-    # Convert SecureStrings to plain text strings for comparison
-    $pw_plain = ConvertFrom-SecureString $pw
-    $pw_confirm_plain = ConvertFrom-SecureString $pw_confirm
-
-    # Compare the plain text passwords
-    if ($pw_plain -ne $pw_confirm_plain) {
-        Write-Output "Passwords do not match. Exiting..."
-        exit
-    }
 
     # Set the current users password to the entered password
     $UserAccount = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $UserAccount = $UserAccount -replace ".*\\", ""
     $UserAccount | Set-LocalUser -Password $pw
     Write-Output "Password set successfully."
 }
