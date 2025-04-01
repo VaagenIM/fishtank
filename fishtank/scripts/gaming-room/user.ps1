@@ -7,12 +7,20 @@ $user = Get-LocalUser -Name $Username -ErrorAction SilentlyContinue
 if ($user) {
     Write-Output "User '$Username' already exists. Skipping creation."
 } else {
-    # Create the user with no password
-    New-LocalUser -Name $Username -NoPassword -Description "Restricted User Account"
-    Write-Output "User '$Username' created successfully."
+    Write-Output "User '$Username' does not exist. Proceeding with creation."
 
-    # Add to the 'Users' group (non-admin)
-    Add-LocalGroupMember -Group "Users" -Member $Username
+    # Create the user with no password
+    try {
+        New-LocalUser -Name $Username -NoPassword -Description "Restricted User Account"
+        Write-Output "User '$Username' created successfully."
+
+        # Add to the 'Users' group (non-admin)
+        Add-LocalGroupMember -Group "Users" -Member $Username
+        Write-Output "User '$Username' added to 'Users' group."
+
+    } catch {
+        Write-Error "Failed to create user '$Username': $_"
+    }
 }
 
 # Prevent user from setting a password (by enforcing an empty password)
@@ -25,7 +33,7 @@ Remove-Item C:\secpol.cfg
 Write-Output "Password change restrictions applied."
 
 # Define the source and destination of the wallpaper
-$SourceWallpaper = "assets\wallpaper.jpg"
+$SourceWallpaper = "assets\gaming-room\wallpaper.jpg"
 $DestinationWallpaper = "C:\ProgramData\gaming-room\wallpaper.jpg"
 
 # Copy the wallpaper to the hidden ProgramData folder

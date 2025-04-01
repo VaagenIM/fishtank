@@ -26,7 +26,11 @@ icacls $batchFile /grant "Users:RX" /T /C
 # Create a scheduled task to run for all users at logon
 $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$batchFile`""
 $trigger = New-ScheduledTaskTrigger -AtLogOn
-$principal = New-ScheduledTaskPrincipal -GroupId "BUILTIN\Users" -LogonType Interactive
+
+# Use the "INTERACTIVE" user for logon type (so it runs for interactive users)
+$principal = New-ScheduledTaskPrincipal -UserId "INTERACTIVE" -LogonType Interactive
+
+# Create the task object
 $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Description "Maps network drives on startup"
 
 # Register the task

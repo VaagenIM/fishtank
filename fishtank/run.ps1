@@ -57,7 +57,7 @@ function install_choco_packages($file) {
             # If the package is in the blacklist, pin it
             if ($blacklist -contains $package) {
                 Write-Output "Pinning $package to suppress upgrades..."
-                choco pin add -n=$package
+                choco pin add -n $package
             }
         }
     }
