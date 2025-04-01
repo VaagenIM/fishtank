@@ -13,6 +13,23 @@ function yn_prompt($prompt) {
     }
 }
 
+$set_password = yn_prompt "Set a password for this admin account?"
+
+if ($set_password) {
+    $pw = Read-Host -AsSecureString -Prompt "Enter a password"
+    $pw_confirm = Read-Host -AsSecureString -Prompt "Confirm the password"
+
+    if ($pw -ne $pw_confirm) {
+        Write-Output "Passwords do not match. Exiting..."
+        exit
+    }
+
+    # Set the current users password to the entered password
+    $UserAccount = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $UserAccount | Set-LocalUser -Password $pw
+    Write-Output "Password set successfully."
+}
+
 $install_common = yn_prompt "Install common software?"
 $install_dev = yn_prompt "Install developer software?"
 $install_gaming_room = yn_prompt "Install gaming room software? (Adds a user, ollama, wallpaper, and maps network drives)"
