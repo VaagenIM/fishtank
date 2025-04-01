@@ -29,6 +29,7 @@ $install_common = yn_prompt "Install common software?"
 $install_dev = yn_prompt "Install developer software?"
 $install_gaming_room = yn_prompt "Install gaming room software? (Adds a user, ollama, wallpaper, and maps network drives)"
 
+Unblock-File choco-installer.ps1
 . .\choco-installer.ps1
 
 # Load blacklist entries (packages that should be pinned)
