@@ -44,9 +44,6 @@ Write-Output "Wallpaper copied to C:\ProgramData\wallpaper.jpg"
 # Get the SID of the newly created user "Vaagen"
 $userSID = (Get-LocalUser -Name $Username).SID
 
-# Define the registry paths for the new user
-$UserProfilePath = "C:\Users\$Username"
-
 # Set the default wallpaper for the new user by targeting their registry
 $RegistryPathUser = "HKU:\$userSID\Control Panel\Desktop"
 Set-ItemProperty -Path $RegistryPathUser -Name Wallpaper -Value $DestinationWallpaper
