@@ -42,23 +42,21 @@ if (Test-Path $blacklistFile) {
 
 function install_choco_packages($file) {
     Write-Output "Installing packages from $file..."
-
-    # Read the package list and process each package
     Get-Content $file | ForEach-Object {
-        $package = $_.Trim()
-
-        if ($package -notmatch "^#|^$") {
-            if ((choco list -r --id-only $package) -eq "") {
-                Write-Output "Installing $package..."
-                powershell -Command "choco install -y $package"
-            } else {
-                Write-Output "$package is already installed. Skipping installation..."
+        if ($_ -notmatch "^#|^$") {
+            if ((choco list -r --id-only $_) -eq "")
+            {
+                Write-Output "Installing $_..."
+                powershell -Command "choco install -y $_"
             }
-
+            else
+            {
+                Write-Output "$_ is already installed. Skipping installation..."
+            }
             # If the package is in the blacklist, pin it
-            if ($blacklist -contains $package) {
-                Write-Output "Pinning $package to suppress upgrades..."
-                choco pin add -n $package
+            if ($blacklist -contains $_) {
+                Write-Output "Pinning $_ to suppress upgrades..."
+                choco pin add -n $_
             }
         }
     }
