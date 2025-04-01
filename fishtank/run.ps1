@@ -19,7 +19,12 @@ if ($set_password) {
     $pw = Read-Host -AsSecureString -Prompt "Enter a password"
     $pw_confirm = Read-Host -AsSecureString -Prompt "Confirm the password"
 
-    if ($pw -ne $pw_confirm) {
+    # Convert SecureStrings to plain text strings for comparison
+    $pw_plain = ConvertFrom-SecureString $pw
+    $pw_confirm_plain = ConvertFrom-SecureString $pw_confirm
+
+    # Compare the plain text passwords
+    if ($pw_plain -ne $pw_confirm_plain) {
         Write-Output "Passwords do not match. Exiting..."
         exit
     }
