@@ -1,0 +1,7 @@
+choco-upgrade-all-at-startup
+adobereader
+7zip
+winrar
+notepadplusplus
+vlc
+filezilla

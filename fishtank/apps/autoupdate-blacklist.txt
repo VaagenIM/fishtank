@@ -1,0 +1,6 @@
+# These have built-in auto-updates, using choco to update them is not recommended
+googlechrome
+firefox
+brave
+steam
+discord

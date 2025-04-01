@@ -1,0 +1,20 @@
+# Tools
+git
+github-desktop
+docker-desktop
+putty
+ffmpeg
+
+# IDEs
+vscode
+
+# Languages / Dev apps
+python3
+nodejs
+jdk8
+godot
+
+# Runtimes
+dotnetfx
+javaruntime
+vcredist-all
