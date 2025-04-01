@@ -41,20 +41,25 @@ $DestinationWallpaper = "C:\ProgramData\wallpaper.jpg"
 Copy-Item -Path $SourceWallpaper -Destination $DestinationWallpaper -Force
 Write-Output "Wallpaper copied to C:\ProgramData\wallpaper.jpg"
 
-# Set the default wallpaper using the copied file
-Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name Wallpaper -Value $DestinationWallpaper
+# Get the SID of the newly created user "Vaagen"
+$userSID = (Get-LocalUser -Name $Username).SID
+
+# Define the registry paths for the new user
+$UserProfilePath = "C:\Users\$Username"
+
+# Set the default wallpaper for the new user by targeting their registry
+$RegistryPathUser = "HKU:\$userSID\Control Panel\Desktop"
+Set-ItemProperty -Path $RegistryPathUser -Name Wallpaper -Value $DestinationWallpaper
 RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
-Write-Output "Default wallpaper set to C:\ProgramData\wallpaper.jpg"
+Write-Output "Default wallpaper set for '$Username' at C:\Users\$Username"
 
-# Prevent "Vaagen" from changing wallpaper and user icon
-$RegistryPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System"
-
-# Disable wallpaper change
-Set-ItemProperty -Path $RegistryPath -Name "NoChangingWallpaper" -Value 1 -Type DWord
+# Prevent the "Vaagen" user from changing the wallpaper and user icon
+$RegistryPathUserPolicy = "HKU:\$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System"
+Set-ItemProperty -Path $RegistryPathUserPolicy -Name "NoChangingWallpaper" -Value 1 -Type DWord
 
 # Restrict user picture change
-$RegPathIcon = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
-If (!(Test-Path $RegPathIcon)) { New-Item -Path $RegPathIcon -Force }
-Set-ItemProperty -Path $RegPathIcon -Name "UseDefaultTile" -Value 1 -Type DWord
+$RegPathIconUser = "HKU:\$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+If (!(Test-Path $RegPathIconUser)) { New-Item -Path $RegPathIconUser -Force }
+Set-ItemProperty -Path $RegPathIconUser -Name "UseDefaultTile" -Value 1 -Type DWord
 
-Write-Output "Wallpaper and user icon change restrictions applied."
+Write-Output "Wallpaper and user icon change restrictions applied to '$Username'."
