@@ -29,10 +29,6 @@ $DestinationWallpaper = "C:\ProgramData\wallpaper.jpg"
 Copy-Item -Path $SourceWallpaper -Destination $DestinationWallpaper -Force
 Write-Output "Wallpaper copied to C:\ProgramData\wallpaper.jpg"
 
-# Skip windows onboarding
-Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE" -Name "SkipMachineOOBE" -Value 1
-Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE" -Name "SkipUserOOBE" -Value 1
-
 $ScriptPath = "C:\ProgramData\ApplySettings_$Username.ps1"
 $ScriptContent = @"
 # Get the SID of the user "$Username"
