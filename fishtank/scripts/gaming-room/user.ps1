@@ -18,6 +18,7 @@ if ($user) {
     Add-LocalGroupMember -Group $UsersGroup.Name -Member $Username
     net user $Username /passwordreq:no
     Write-Output "User '$Username' added to the '$($UsersGroup.Name)' group."
+    Set-LocalUser -name "$Username" -Password ([securestring]::new())
 }
 
 # Define the source and destination of the wallpaper
@@ -28,8 +29,56 @@ $DestinationWallpaper = "C:\ProgramData\wallpaper.jpg"
 Copy-Item -Path $SourceWallpaper -Destination $DestinationWallpaper -Force
 Write-Output "Wallpaper copied to C:\ProgramData\wallpaper.jpg"
 
-$userSID = (Get-LocalUser -Name $Username).SID
+# Skip windows onboarding
+Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE" -Name "SkipMachineOOBE" -Value 1
+Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE" -Name "SkipUserOOBE" -Value 1
 
-# TODO: Set wallpaper for user on every login
-# TODO: Set user icon on every login (standard user icon / disabled)
-# TODO: Set the password to nothing (empty string) on every boot
+$ScriptPath = "C:\ProgramData\ApplySettings_$Username.ps1"
+$ScriptContent = @"
+# Get the SID of the user "$Username"
+`$userSID = (Get-LocalUser -Name "$Username").SID
+
+# Prevent user from being able to change password
+Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name DisableChangePassword -Value 1
+
+# Set the wallpaper for the user by SID (directly modifying the registry)
+Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Control Panel\Desktop" -Name WallPaper -Value "C:\ProgramData\wallpaper.jpg"
+
+# Set the wallpaper style to 'Fill' for the user by SID (direct registry modification)
+Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Control Panel\Desktop" -Name WallpaperStyle -Value 10
+Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Control Panel\Desktop" -Name TileWallpaper -Value 0
+
+# Set the lock screen image (for users with appropriate policies) via SID (global setting)
+Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name LockScreenImage -Value "C:\ProgramData\wallpaper.jpg"
+
+# Run UpdatePerUserSystemParameters as user Vaagen (via registry change)
+# This method works as the changes are immediately reflected without needing to invoke a separate process.
+Start-Sleep -Seconds 10
+rundll32.exe user32.dll, UpdatePerUserSystemParameters, 0, True
+"@
+
+# Write the script content to a file
+Set-Content -Path $ScriptPath -Value $ScriptContent
+
+# Add as a scheduled task to run silently
+$TaskName = "ApplySettings_$Username"
+
+# Delete the task if it already exists
+Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+
+# Define the action to run PowerShell script silently
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File `"$ScriptPath`""
+
+# Set trigger to run at user login
+$Trigger = New-ScheduledTaskTrigger -AtLogOn
+
+# Define task principal (run with highest privileges)
+$Principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+
+# Create the scheduled task
+$Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principal -Description "Applies settings for user '$Username' on login"
+
+# Register the scheduled task
+Register-ScheduledTask -TaskName $TaskName -InputObject $Task
+
+Write-Output "Scheduled task '$TaskName' created successfully."
