@@ -1,2 +1,1 @@
 blender
-sunshine  # Allow streaming from the computer. TODO: Configure frontend to be accessible on certain VLANs
