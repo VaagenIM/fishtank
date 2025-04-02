@@ -39,17 +39,14 @@ Get-WindowsCapability -Online -Name XPS.Viewer* | Remove-WindowsCapability -Onli
 Get-WindowsOptionalFeature -Online -FeatureName WindowsMediaPlayer | Disable-WindowsOptionalFeature -Online -Remove # Remove Windows Media Player
 Get-WindowsOptionalFeature -Online -FeatureName Internet-Explorer-Optional-* | Disable-WindowsOptionalFeature -Online -Remove -NoRestart # Remove Internet Explorer
 
-# Disable SIUF (System Initiated User Feedback)
-reg.exe ADD "HKEY_CURRENT_USER\SOFTWARE\Microsoft\Siuf\Rules" /v NumberOfSIUFInPeriod /t REG_DWORD /d "0" /f
+# Get all user SIDs
+$userSIDs = Get-ChildItem "Registry::HKEY_USERS" | Where-Object { $_.Name -notmatch "S-1-5-18" } | Select-Object -ExpandProperty Name
 
 # Disable fast start-up
 reg.exe ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled /t REG_DWORD /d "0" /f
 
-# Disable Windows Security summary notifications0
+# Disable Windows Security summary notifications
 reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Defender Security Center\Virus and threat protection" /v SummaryNotificationDisabled /t REG_DWORD /d "1" /f
-
-# Disable get the most out of Windows
-reg.exe ADD "HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\UserProfileEngagement" /v ScoobeSystemSettingEnabled /t REG_DWORD /d "0" /f
 
 # Disable Tailored Experiences
 reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Privacy" /v TailoredExperiencesWithDiagnosticDataEnabled /t REG_DWORD /d "0" /f
@@ -57,15 +54,30 @@ reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Privac
 # Disable Telemetry
 reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d "0" /f
 
-# Disable Game Bar Auto Game Mode
-reg.exe ADD "HKEY_CURRENT_USER\SOFTWARE\Microsoft\GameBar" /v AutoGameModeEnabled /t REG_DWORD /d "0" /f
-
 # Disable Clipboard History
-reg.exe ADD "HKEY_CURRENT_USER\SOFTWARE\Microsoft\Clipboard" /v EnableClipboardHistory /t REG_DWORD /d "0" /f
 reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System" /v AllowClipboardHistory /t REG_DWORD /d "0" /f
 reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System" /v AllowCrossDeviceClipboard /t REG_DWORD /d "0" /f
 reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System" /v UploadUserActivities /t REG_DWORD /d "0" /f
 reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System" /v PublishUserActivities /t REG_DWORD /d "0" /f
 reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableActivityFeed /t REG_DWORD /d "0" /f
+
+# Apply user-specific settings (HKEY_CURRENT_USER) for each user
+foreach ($userSID in $userSIDs) {
+    Write-Output "Applying user-specific settings for user SID: $userSID"
+
+    $userHive = "$userSID\SOFTWARE\Microsoft"
+
+    # Disable SIUF (System Initiated User Feedback) (per user)
+    reg.exe ADD "$userHive\Siuf\Rules" /v NumberOfSIUFInPeriod /t REG_DWORD /d "0" /f
+
+    # Disable get the most out of Windows (per user)
+    reg.exe ADD "$userHive\Windows\CurrentVersion\UserProfileEngagement" /v ScoobeSystemSettingEnabled /t REG_DWORD /d "0" /f
+
+    # Disable Game Bar Auto Game Mode (per user)
+    reg.exe ADD "$userHive\GameBar" /v AutoGameModeEnabled /t REG_DWORD /d "0" /f
+
+    # Disable Clipboard History (per user)
+    reg.exe ADD "$userHive\Clipboard" /v EnableClipboardHistory /t REG_DWORD /d "0" /f
+}
 
 # More options: https://gist.github.com/y0lopix/bca18265869e5da9068de0a6729bc262

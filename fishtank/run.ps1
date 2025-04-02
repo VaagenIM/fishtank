@@ -96,8 +96,6 @@ function execute_scripts_recursive($directory) {
     }
 }
 
-execute_scripts_recursive "scripts"
-
 if ($install_common) {
     install_choco_packages_recursive "apps/common"
     execute_scripts_recursive "scripts/common"
@@ -112,6 +110,8 @@ if ($install_gaming_room) {
     install_choco_packages_recursive "apps/gaming-room"
     execute_scripts_recursive "scripts/gaming-room"
 }
+
+execute_scripts_recursive "scripts"
 
 Write-Output "Fishtank is set up!"
 
