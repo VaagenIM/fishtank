@@ -53,7 +53,7 @@ function install_choco_packages($file) {
 
         if (-not $isInstalled) {
             Write-Output "Installing $packageName..."
-            choco install -y $packageName
+            choco install -y --ignore-checksums $packageName
         } else {
             Write-Output "$packageName is already installed. Skipping installation..."
         }
