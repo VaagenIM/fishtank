@@ -46,7 +46,8 @@ function install_choco_packages($file) {
     Get-Content $file | Where-Object {
         ($_ -notmatch "^#|^$") -and ($_ -match "\S")
     } | ForEach-Object {
-        $packageName = $_.Trim()
+        $packageName = $_ -replace "#.*", ""
+        $packageName = $packageName.Trim()
 
         # Check if package is already installed
         $isInstalled = choco list --local-only | Select-String "^$packageName\s"
