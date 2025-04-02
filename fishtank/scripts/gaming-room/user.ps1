@@ -25,32 +25,62 @@ if ($user) {
 $SourceWallpaper = "assets\gaming-room\wallpaper.jpg"
 $DestinationWallpaper = "C:\ProgramData\wallpaper.jpg"
 
-# Copy the wallpaper to the hidden ProgramData folder
-Copy-Item -Path $SourceWallpaper -Destination $DestinationWallpaper -Force
-Write-Output "Wallpaper copied to C:\ProgramData\wallpaper.jpg"
+# Define the source and destination of the screensaver
+$SourceLockscreenWallpaper = "assets\gaming-room\lockscreenwallpaper.jpg"
+$DestinationLockscreenWallpaper = "C:\ProgramData\lockscreenwallpaper.jpg"
 
-$ScriptPath = "C:\ProgramData\ApplySettings_$Username.ps1"
+# Copy the wallpaper + LockscreenWallpaper to the hidden ProgramData folder
+Copy-Item -Path $SourceWallpaper -Destination $DestinationWallpaper -Force
+Copy-Item -Path $SourceLockscreenWallpaper -Destination $DestinationLockscreenWallpaper -Force
+
+# Create a PowerShell script that will be executed on the first login to configure the user profile
+$ScriptPath = "C:\ProgramData\FirstLoginConfig.ps1"
 $ScriptContent = @"
 # Get the SID of the user "$Username"
 `$userSID = (Get-LocalUser -Name "$Username").SID
 
-# Prevent user from being able to change password
-Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name DisableChangePassword -Value 1
+# Reset the password to empty, just for good measure
+net user $Username ""
+net user $Username /passwordreq:no
+
+# Set the registry keys for disabling password change for the user
+New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Force
+Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name DisableChangePassword -Value 1
+New-Item -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Force
+Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name DisableChangePassword -Value 1
 
 # Set the wallpaper for the user by SID (directly modifying the registry)
-Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Control Panel\Desktop" -Name WallPaper -Value "C:\ProgramData\wallpaper.jpg"
-
-# Set the wallpaper style to 'Fill' for the user by SID (direct registry modification)
-Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Control Panel\Desktop" -Name WallpaperStyle -Value 10
-Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Control Panel\Desktop" -Name TileWallpaper -Value 0
+Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Control Panel\Desktop" -Name WallPaper -Value "$DestinationWallpaper"
+Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Control Panel\Desktop" -Name WallpaperStyle -Value 4  # Fill
+Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Control Panel\Desktop" -Name TileWallpaper -Value 0
 
 # Set the lock screen image (for users with appropriate policies) via SID (global setting)
-Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name LockScreenImage -Value "C:\ProgramData\wallpaper.jpg"
+New-Item -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Force
+Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name LockScreenImage -Value "$DestinationLockscreenWallpaper"
 
 # Run UpdatePerUserSystemParameters as user Vaagen (via registry change)
-# This method works as the changes are immediately reflected without needing to invoke a separate process.
 Start-Sleep -Seconds 10
 rundll32.exe user32.dll, UpdatePerUserSystemParameters, 0, True
+
+# Prevent users from changing the wallpaper
+New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop" -Force
+Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop" -Name NoChangingWallPaper -Value 1
+
+# Prevent users from changing the lockscreen wallpaper
+New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Force
+Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name NoChangingLockScreen -Value 1
+New-Item -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Force
+Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name NoChangingLockScreen -Value 1
+
+# Prevent users from changing the profile picture
+New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Force
+Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name NoChangingProfile -Value 1
+
+# Prevent users from changing the screensaver
+New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Force
+Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name NoDispScrSavPage -Value 1
+
+Write-Output "Registry settings applied successfully. (User needs to log out and back in for some changes to take effect.)"
 "@
 
 # Write the script content to a file
@@ -62,14 +92,14 @@ $TaskName = "ApplySettings_$Username"
 # Delete the task if it already exists
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
-# Define the action to run PowerShell script silently
-$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File `"$ScriptPath`""
+# Define the action to run the script silently
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$ScriptPath`""
 
 # Set trigger to run at user login
 $Trigger = New-ScheduledTaskTrigger -AtLogOn
 
 # Define task principal (run with highest privileges)
-$Principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+$Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType Password -RunLevel Highest
 
 # Create the scheduled task
 $Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principal -Description "Applies settings for user '$Username' on login"

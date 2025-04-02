@@ -24,13 +24,13 @@ Write-Output "All drives mapped successfully."
 $ScriptPath = "C:\ProgramData\map_drives.ps1"
 Set-Content -Path $ScriptPath -Value $ScriptContent
 
-# Ensure the script runs at login for all users by adding it to the registry
-$RegPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
+# Create a scheduled task that runs in the background to map network drives on login
+$TaskName = "MapDrives"
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$ScriptPath`""
+$Trigger = New-ScheduledTaskTrigger -AtLogOn
+$Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType Password -RunLevel Highest
+$Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principal -Description "Maps network drives on login"
+Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+Register-ScheduledTask -TaskName $TaskName -InputObject $Task
 
-if (!(Test-Path $RegPath)) {
-    New-Item -Path $RegPath -Force
-}
-
-Set-ItemProperty -Path $RegPath -Name "MapNetworkDrives" -Value "powershell -ExecutionPolicy Bypass -File `"$ScriptPath`""
-
-Write-Output "Logon script registered in Windows Registry to run at startup for all users."
+Write-Output "Scheduled task '$TaskName' created successfully to map network drives on login."
