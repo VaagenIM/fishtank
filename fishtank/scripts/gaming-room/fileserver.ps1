@@ -28,7 +28,7 @@ Set-Content -Path $ScriptPath -Value $ScriptContent
 $TaskName = "MapDrives"
 $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$ScriptPath`""
 $Trigger = New-ScheduledTaskTrigger -AtLogOn
-$Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType Password -RunLevel Highest
+$Principal = New-ScheduledTaskPrincipal -UserId [System.Security.Principal.WindowsIdentity]::GetCurrent().Name -LogonType Interactive -RunLevel Highest
 $Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principal -Description "Maps network drives on login"
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 Register-ScheduledTask -TaskName $TaskName -InputObject $Task

@@ -57,10 +57,8 @@ Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Control Panel\Desktop" -N
 # Set the lock screen image (for users with appropriate policies) via SID (global setting)
 New-Item -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Force
 Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name LockScreenImage -Value "$DestinationLockscreenWallpaper"
-
-# Run UpdatePerUserSystemParameters as user Vaagen (via registry change)
-Start-Sleep -Seconds 10
-rundll32.exe user32.dll, UpdatePerUserSystemParameters, 0, True
+New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Policies\Microsoft\Windows\Personalization" -Force
+Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Policies\Microsoft\Windows\Personalization" -Name LockScreenImage -Value "$DestinationLockscreenWallpaper"
 
 # Prevent users from changing the wallpaper
 New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop" -Force
@@ -80,7 +78,48 @@ Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Window
 New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Force
 Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name NoDispScrSavPage -Value 1
 
-Write-Output "Registry settings applied successfully. (User needs to log out and back in for some changes to take effect.)"
+# Prevent users from adding custom themes
+New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Policies\Microsoft\Windows\Personalization" -Force
+Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Policies\Microsoft\Windows\Personalization" -Name NoChangingTheme -Value 1
+
+# Disable the ability to change the lock screen slideshow settings (if applicable)
+New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Policies\Microsoft\Windows\Personalization" -Force
+Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Policies\Microsoft\Windows\Personalization" -Name NoLockScreenSlideshow -Value 1
+
+# Disable user from setting their own password hint
+New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Force
+Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name NoPasswordHints -Value 1
+
+
+if (Test-Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Lenovo") {
+    # Target Lenovo-specific registry policies if applicable
+    # Lenovo may have additional registry paths such as those found in `HKEY_LOCAL_MACHINE\SOFTWARE\Lenovo\` or `HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Lenovo`
+    # Here, we can set some example Lenovo policies if they exist on the system, to block user changes:
+
+    # Disable customization of wallpaper for Lenovo devices
+    New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo" -Force
+    Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo" -Name "NoChangingWallpaper" -Value 1
+
+    # Prevent changes to lock screen settings for Lenovo devices
+    New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo" -Force
+    Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo" -Name "NoLockscreenCustomization" -Value 1
+
+    # Prevent users from accessing Lenovo System Updates (example policy)
+    New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo\SystemUpdate" -Force
+    Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo\SystemUpdate" -Name "DisableUI" -Value 1
+
+    # Disable Lenovo Vantage customizations for the user (if Lenovo Vantage app is present)
+    New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo\Vantage" -Force
+    Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo\Vantage" -Name "NoUserProfileCustomization" -Value 1
+
+    # Disable the Lenovo quick launch bar or other Lenovo-specific toolbar settings
+    New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo\QuickLaunch" -Force
+    Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo\QuickLaunch" -Name "DisableToolbar" -Value 1
+
+    # Disable Lenovo OEM-specific screen savers (if applicable)
+    New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo\ScreenSaver" -Force
+    Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo\ScreenSaver" -Name "DisableOEMScreensaver" -Value 1
+}
 "@
 
 # Write the script content to a file
@@ -99,7 +138,7 @@ $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-Executio
 $Trigger = New-ScheduledTaskTrigger -AtLogOn
 
 # Define task principal (run with highest privileges)
-$Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType Password -RunLevel Highest
+$Principal = New-ScheduledTaskPrincipal -UserId [System.Security.Principal.WindowsIdentity]::GetCurrent().Name -LogonType Interactive -RunLevel Highest
 
 # Create the scheduled task
 $Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principal -Description "Applies settings for user '$Username' on login"
