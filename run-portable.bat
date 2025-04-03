@@ -2,7 +2,6 @@
 :: Define the URL of the source code and the destination file
 set "url=https://github.com/VaagenIM/fishtank/archive/refs/heads/main.zip"
 set "dest=%USERPROFILE%\Desktop\fishtank.zip"
-set "extractDir=%USERPROFILE%\Desktop\fishtank"
 
 :: Download the ZIP file to the Desktop using curl (faster and more reliable)
 echo Downloading fishtank.zip...
@@ -16,12 +15,9 @@ powershell -Command "Expand-Archive -Path %dest% -DestinationPath %USERPROFILE%\
 echo Removing the ZIP file...
 del "%dest%"
 
-:: Change to the extracted directory
-cd /d "%extractDir%\fishtank-main"
-
-:: Run the run.bat file
+:: Run the run.bat file (on a new window, since we are closing this one)
 echo Running run.bat...
-call run.bat
+start cmd /k "%USERPROFILE%\Desktop\fishtank-main\run.bat"
 
 :: Clean up the downloaded ZIP file
 del "%dest%"
