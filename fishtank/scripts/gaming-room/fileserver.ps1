@@ -24,13 +24,14 @@ Write-Output "All drives mapped successfully."
 $ScriptPath = "C:\ProgramData\map_drives.ps1"
 Set-Content -Path $ScriptPath -Value $ScriptContent
 
-# Create a scheduled task that runs in the background to map network drives on login
+# Create a scheduled task to map network drives at user login
 $TaskName = "MapDrives"
-$Action = New-ScheduledTaskAction -Execute "C:\Windows\System32\conhost.exe" -Argument "/c powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NoProfile -NoInteractive -File `"$ScriptPath`" "
-$Trigger = New-ScheduledTaskTrigger -AtLogOn -User $Username
-$Principal = New-ScheduledTaskPrincipal -UserId [System.Security.Principal.WindowsIdentity]::GetCurrent().Name -LogonType Interactive -RunLevel Highest
-$Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principal -Description "Maps network drives on login"
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File $ScriptPath" -WorkingDirectory "C:\ProgramData"
+$Trigger = New-ScheduledTaskTrigger -AtLogOn
+$Principal = New-ScheduledTaskPrincipal -UserId "INTERACTIVE" -LogonType InteractiveToken
+$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -DontStopOnIdleEnd -StartWhenAvailable
+
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
-Register-ScheduledTask -TaskName $TaskName -InputObject $Task
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings
 
 Write-Output "Scheduled task '$TaskName' created successfully to map network drives on login."

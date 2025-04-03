@@ -37,11 +37,10 @@ Copy-Item -Path $SourceLockscreenWallpaper -Destination $DestinationLockscreenWa
 $ScriptPath = "C:\ProgramData\FirstLoginConfig.ps1"
 $ScriptContent = @"
 # Get the SID of the user "$Username"
-`$userSID = (Get-LocalUser -Name "$Username").SID
+`$userSID = (Get-LocalUser -Name "$Username").SID.Value
 
 # Reset the password to empty, just for good measure
-net user $Username ""
-net user $Username /passwordreq:no
+Set-LocalUser -name "$Username" -Password ([securestring]::new())
 
 # Set the registry keys for disabling password change for the user
 New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Force
@@ -90,7 +89,6 @@ Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Policies\Microso
 New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Force
 Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name NoPasswordHints -Value 1
 
-
 if (Test-Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Lenovo") {
     # Target Lenovo-specific registry policies if applicable
     # Lenovo may have additional registry paths such as those found in `HKEY_LOCAL_MACHINE\SOFTWARE\Lenovo\` or `HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Lenovo`
@@ -120,18 +118,25 @@ if (Test-Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Lenovo") {
     New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo\ScreenSaver" -Force
     Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Lenovo\ScreenSaver" -Name "DisableOEMScreensaver" -Value 1
 }
+
+# Apply the wallpaper / user settings
+rundll32.exe user32.dll, UpdatePerUserSystemParameters, 0, True
+Start-Sleep -Seconds 10
+rundll32.exe user32.dll, UpdatePerUserSystemParameters, 0, True
 "@
 
 # Write the script content to a file
 Set-Content -Path $ScriptPath -Value $ScriptContent
 
-# Add as a scheduled task to run silently
 $TaskName = "ApplySettings_$Username"
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File $ScriptPath" -WorkingDirectory "C:\ProgramData"
+$StartupTrigger = New-ScheduledTaskTrigger -AtStartup
+$LogonTrigger = New-ScheduledTaskTrigger -AtLogon
+$Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -DontStopOnIdleEnd -StartWhenAvailable
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
-$Action = New-ScheduledTaskAction -Execute "C:\Windows\System32\conhost.exe" -Argument "/c powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NoProfile -NoInteractive -File `"$ScriptPath`" "
-$Trigger = New-ScheduledTaskTrigger -AtLogOn -User $Username
-$Principal = New-ScheduledTaskPrincipal -UserId [System.Security.Principal.WindowsIdentity]::GetCurrent().Name -LogonType Interactive -RunLevel Highest
-$Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principal -Description "Applies settings for user '$Username' on login"
-Register-ScheduledTask -TaskName $TaskName -InputObject $Task
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $StartupTrigger -Principal $Principal -Settings $Settings
+Unregister-ScheduledTask -TaskName "$TaskName-Logon" -Confirm:$false -ErrorAction SilentlyContinue
+Register-ScheduledTask -TaskName "$TaskName-Logon" -Action $Action -Trigger $LogonTrigger -Principal $Principal -Settings $Settings
 
 Write-Output "Scheduled task '$TaskName' created successfully."
