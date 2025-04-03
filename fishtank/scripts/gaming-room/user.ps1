@@ -127,23 +127,11 @@ Set-Content -Path $ScriptPath -Value $ScriptContent
 
 # Add as a scheduled task to run silently
 $TaskName = "ApplySettings_$Username"
-
-# Delete the task if it already exists
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
-
-# Define the action to run the script silently
-$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$ScriptPath`""
-
-# Set trigger to run at user login
-$Trigger = New-ScheduledTaskTrigger -AtLogOn
-
-# Define task principal (run with highest privileges)
+$Action = New-ScheduledTaskAction -Execute "C:\Windows\System32\conhost.exe" -Argument "/c powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NoProfile -NoInteractive -File `"$ScriptPath`" "
+$Trigger = New-ScheduledTaskTrigger -AtLogOn -User $Username
 $Principal = New-ScheduledTaskPrincipal -UserId [System.Security.Principal.WindowsIdentity]::GetCurrent().Name -LogonType Interactive -RunLevel Highest
-
-# Create the scheduled task
 $Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principal -Description "Applies settings for user '$Username' on login"
-
-# Register the scheduled task
 Register-ScheduledTask -TaskName $TaskName -InputObject $Task
 
 Write-Output "Scheduled task '$TaskName' created successfully."

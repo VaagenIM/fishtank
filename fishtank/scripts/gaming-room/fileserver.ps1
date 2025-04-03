@@ -26,8 +26,8 @@ Set-Content -Path $ScriptPath -Value $ScriptContent
 
 # Create a scheduled task that runs in the background to map network drives on login
 $TaskName = "MapDrives"
-$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$ScriptPath`""
-$Trigger = New-ScheduledTaskTrigger -AtLogOn
+$Action = New-ScheduledTaskAction -Execute "C:\Windows\System32\conhost.exe" -Argument "/c powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NoProfile -NoInteractive -File `"$ScriptPath`" "
+$Trigger = New-ScheduledTaskTrigger -AtLogOn -User $Username
 $Principal = New-ScheduledTaskPrincipal -UserId [System.Security.Principal.WindowsIdentity]::GetCurrent().Name -LogonType Interactive -RunLevel Highest
 $Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principal -Description "Maps network drives on login"
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
