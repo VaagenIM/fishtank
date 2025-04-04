@@ -4,25 +4,6 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     exit
 }
 
-# Ensure we are using PowerShell 7+
-if ($PSVersionTable.PSVersion.Major -lt 7) {
-    Write-Output "PowerShell >7 is required. Installing..."
-    winget install --id Microsoft.PowerShell --source winget -e --accept-source-agreements --accept-package-agreements
-}
-
-# If we aren't running from a "pwsh" shell, we need to restart the script with "pwsh"
-if ($PSVersionTable.PSEdition -ne "Core") {
-    Write-Output "Restarting script with PowerShell Core..."
-    Start-Process -FilePath "pwsh" -ArgumentList "-NoProfile", "-ExecutionPolicy Bypass", "-File", $MyInvocation.MyCommand.Path
-    exit
-}
-
-# A function to start a script in a new cmd window
-function cmd_process($script) {
-    $cmd = "cmd.exe /c start cmd.exe /k pwsh -NoProfile -ExecutionPolicy Bypass -File `"$script`""
-    Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "start", "cmd.exe", "/k", $cmd
-}
-
 function yn_prompt($prompt) {
     $response = Read-Host -prompt "$prompt (Y/n)"
     if ($response -eq "y" -or $response -eq "") {
@@ -43,6 +24,7 @@ if ($set_password) {
         exit
     }
 
+    # Set the current users password to the entered password
     $UserAccount = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
     $UserAccount = $UserAccount -replace ".*\\", ""
     $UserAccount | Set-LocalUser -Password $pw
@@ -57,14 +39,14 @@ if ($install_sunshine) {
     $sunshine_password_clean = [System.Net.NetworkCredential]::new("", $sunshine_password).Password
 }
 
-$install_common      = yn_prompt "Install common software?"
-$install_dev         = yn_prompt "Install developer software?"
+$install_common = yn_prompt "Install common software?"
+$install_dev = yn_prompt "Install developer software?"
 $install_gaming_room = yn_prompt "Install gaming room software? (Adds a user, ollama, wallpaper, and maps network drives)"
-$run_scripts         = yn_prompt "Run final scripts? (Debloat, auto-update, etc.)"
-$logout_after        = yn_prompt "Log out after installation?"
+$install_scripts = yn_prompt "Install scripts? (Debloat, auto-update, etc.)"
+$logout_after = yn_prompt "Log out after installation?"
 
 Unblock-File choco-installer.ps1
-cmd_process .\choco-installer.ps1
+. .\choco-installer.ps1
 
 # Load blacklist entries (packages that should be pinned)
 $blacklistFile = "apps/autoupdate-blacklist.txt"
@@ -76,29 +58,38 @@ if (Test-Path $blacklistFile) {
 
 function install_choco_packages($file) {
     Write-Output "Installing packages from $file..."
-    $packages = Get-Content $file | Where-Object { ($_ -notmatch "^#|^$") -and ($_ -match "\S") }
 
-    $packages | ForEach-Object -Parallel {
-        $packageName = ($_ -replace "#.*", "").Trim()
+    Get-Content $file | Where-Object {
+        ($_ -notmatch "^#|^$") -and ($_ -match "\S")
+    } | ForEach-Object {
+        $packageName = $_ -replace "#.*", ""
+        $packageName = $packageName.Trim()
+
+        # Check if package is already installed
         $isInstalled = choco list --local-only | Select-String "^$packageName\s"
+
         if (-not $isInstalled) {
             Write-Output "Installing $packageName..."
             choco install -y --ignore-checksums $packageName
         } else {
-            Write-Output "$packageName already installed. Skipping..."
+            Write-Output "$packageName is already installed. Skipping installation..."
         }
 
-        if ($using:blacklist -contains $packageName) {
+        # If the package is in the blacklist, pin it
+        if ($blacklist -contains $packageName) {
             Write-Output "Pinning $packageName to suppress upgrades..."
             choco pin add -n $packageName
         }
-    } -ThrottleLimit 8
+    }
 }
 
 function install_choco_packages_recursive($directory) {
     Write-Output "Processing package files in $directory..."
+
     if (Test-Path $directory) {
+        # Get all .txt files in the directory
         Get-ChildItem -Path $directory -Filter "*.txt" | ForEach-Object {
+            Write-Output "Installing packages from $($_.FullName)..."
             install_choco_packages $_.FullName
         }
     } else {
@@ -108,49 +99,44 @@ function install_choco_packages_recursive($directory) {
 
 function execute_scripts_recursive($directory) {
     Write-Output "Executing scripts in $directory..."
+
     if (Test-Path $directory) {
-        Get-ChildItem -Path $directory -Filter "*.ps1" |
-        ForEach-Object -Parallel {
-            Unblock-File -Path $_
-            Write-Output "Running script: $_..."
-            cmd_process $_
-        } -ThrottleLimit 8
+        # Get all .ps1 script files in the directory
+        Get-ChildItem -Path $directory -Filter "*.ps1" | ForEach-Object {
+            Write-Output "Running script: $($_.FullName)..."
+            Unblock-File -Path $_.FullName
+            & $_.FullName
+        }
     } else {
         Write-Output "Directory $directory does not exist. Skipping..."
     }
 }
 
-
-# Sunshine install
 if ($install_sunshine) {
-    Write-Output "Installing sunshine..."
     choco install -y sunshine
-
     $sunshine_binary = "C:\Program Files\Sunshine\sunshine.exe"
     $sunshine_creds = "--creds `"$sunshine_uname`" `"$sunshine_password_clean`""
-
     Start-Process -FilePath $sunshine_binary -ArgumentList $sunshine_creds -WindowStyle Hidden -Wait
     Stop-Process -Name "sunshine" -Force -ErrorAction SilentlyContinue
     Start-Process -FilePath $sunshine_binary -ArgumentList $sunshine_creds -WindowStyle Hidden
 }
 
-# Install groups
 if ($install_common) {
     install_choco_packages_recursive "apps/common"
     execute_scripts_recursive "scripts/common"
 }
+
 if ($install_dev) {
     install_choco_packages_recursive "apps/dev"
     execute_scripts_recursive "scripts/dev"
 }
+
 if ($install_gaming_room) {
     install_choco_packages_recursive "apps/gaming-room"
     execute_scripts_recursive "scripts/gaming-room"
 }
 
-# Run scripts
-if ($run_scripts) {
-    Write-Output "Running final script executions... (cleanup, debloat, etc.)"
+if ($install_scripts) {
     execute_scripts_recursive "scripts"
 }
 
@@ -161,3 +147,6 @@ if ($logout_after) {
     Start-Sleep -Seconds 5
     shutdown /l
 }
+
+# If we aren't logging out, we can just pause the script to let the user see the output
+pause
