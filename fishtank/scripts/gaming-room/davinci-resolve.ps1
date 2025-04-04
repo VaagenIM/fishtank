@@ -56,6 +56,13 @@ if ($msiFound) {
 if (!$installerProc.HasExited) {
     Write-Output "Closing the original installer process..."
     $installerProc | Stop-Process -Force
+    $setupProc = Get-Process -Name "SetupResolve" -ErrorAction SilentlyContinue
+    if ($setupProc) {
+        Write-Output "Closing SetupResolve.exe process..."
+        $setupProc | Stop-Process -Force
+    } else {
+        Write-Output "SetupResolve.exe process not found."
+    }
 } else {
     Write-Output "Original installer process has already exited."
 }
