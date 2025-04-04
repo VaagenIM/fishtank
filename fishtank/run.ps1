@@ -126,7 +126,7 @@ if ($install_sunshine) {
         @{ Name = "Sunshine TCP 48010"; Port = 48010; Protocol = "TCP" },
         @{ Name = "Sunshine UDP 47998"; Port = 47998; Protocol = "UDP" },
         @{ Name = "Sunshine UDP 47999"; Port = 47999; Protocol = "UDP" },
-        @{ Name = "Sunshine UDP 48000"; Port = 48000; Protocol = "UDP" },
+        @{ Name = "Sunshine UDP 48000"; Port = 48000; Protocol = "UDP" }
     )
 
     foreach ($rule in $firewall_rules) {
