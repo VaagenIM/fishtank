@@ -56,39 +56,39 @@ if (Test-Path $blacklistFile) {
     $blacklist = @()
 }
 
-# Function: Install packages from a text file concurrently for each package
-function install_choco_packages($file) {
-    Write-Output "Installing packages from $file..."
-    $jobs = @()
-    Get-Content $file | Where-Object { ($_ -notmatch "^#|^$") -and ($_ -match "\S") } | ForEach-Object {
-        $packageName = ($_ -replace "#.*", "").Trim()
-        # Check if package is already installed
-        $isInstalled = choco list --local-only | Select-String "^$packageName\s"
-        if (-not $isInstalled) {
-            Write-Output "Scheduling installation for $packageName..."
-            $job = Start-Job -ScriptBlock {
-                param($pkg)
-                choco install -y --ignore-checksums $pkg
-            } -ArgumentList $packageName
-            $jobs += $job
-        } else {
-            Write-Output "$packageName is already installed. Skipping installation..."
-        }
-        # If the package is in the blacklist, pin it
-        if ($blacklist -contains $packageName) {
-            Write-Output "Pinning $packageName to suppress upgrades..."
-            choco pin add -n $packageName
-        }
-    }
-    if ($jobs.Count -gt 0) {
-        Write-Output "Waiting for package installation jobs to complete for file $file..."
-        $jobs | Wait-Job | Out-Null
-        $jobs | ForEach-Object { Receive-Job $_ | Write-Output }
-    }
-}
-
 # Function: Process package files in a directory (runs installations concurrently per file)
 function install_choco_packages_recursive($directory) {
+    # Function: Install packages from a text file concurrently for each package
+    function install_choco_packages($file) {
+        Write-Output "Installing packages from $file..."
+        $c_jobs = @()
+        Get-Content $file | Where-Object { ($_ -notmatch "^#|^$") -and ($_ -match "\S") } | ForEach-Object {
+            $packageName = ($_ -replace "#.*", "").Trim()
+            # Check if package is already installed
+            $isInstalled = choco list --local-only | Select-String "^$packageName\s"
+            if (-not $isInstalled) {
+                Write-Output "Scheduling installation for $packageName..."
+                $job = Start-Job -ScriptBlock {
+                    param($pkg)
+                    choco install -y --ignore-checksums $pkg
+                } -ArgumentList $packageName
+                $c_jobs += $job
+            } else {
+                Write-Output "$packageName is already installed. Skipping installation..."
+            }
+            # If the package is in the blacklist, pin it
+            if ($blacklist -contains $packageName) {
+                Write-Output "Pinning $packageName to suppress upgrades..."
+                choco pin add -n $packageName
+            }
+        }
+        if ($c_jobs.Count -gt 0) {
+            Write-Output "Waiting for package installation jobs to complete for file $file..."
+            $c_jobs | Wait-Job | Out-Null
+            $c_jobs | ForEach-Object { Receive-Job $_ | Write-Output }
+        }
+    }
+
     Write-Output "Processing package files in $directory..."
     if (Test-Path $directory) {
         $jobs = @()
