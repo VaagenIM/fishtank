@@ -9,6 +9,7 @@ $extract_folder = "$download_folder\$davinci_filename"
 $filename = "$davinci_filename.exe"
 
 Write-Output "Downloading DaVinci Resolve from $download_url..."
+$ProgressPreference = 'SilentlyContinue'
 Invoke-WebRequest -Uri $download_url -OutFile $zip_file
 Write-Output "Extracting DaVinci Resolve to $extract_folder..."
 Expand-Archive -Path $zip_file -DestinationPath $extract_folder -Force
