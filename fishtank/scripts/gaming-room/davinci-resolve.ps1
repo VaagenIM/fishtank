@@ -6,15 +6,58 @@ $download_url = "https://apps.iktim.no/Software/Windows/$davinci_filename.zip"
 $download_folder = "$env:USERPROFILE\Downloads"
 $zip_file = "$download_folder\$davinci_filename.zip"
 $extract_folder = "$download_folder\$davinci_filename"
-$filename = "$davinci_filename.exe"
+$installerExe = "$davinci_filename.exe"
 
 Write-Output "Downloading DaVinci Resolve from $download_url..."
-$ProgressPreference = 'SilentlyContinue'
-Invoke-WebRequest -Uri $download_url -OutFile $zip_file
+if (Test-Path $zip_file) {
+    Write-Output "File $zip_file already exists. Skipping download..."
+} else {
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -Uri $download_url -OutFile $zip_file
+}
 Write-Output "Extracting DaVinci Resolve to $extract_folder..."
-Expand-Archive -Path $zip_file -DestinationPath $extract_folder -Force
-Write-Output "Running DaVinci Resolve installer..."
+if (Test-Path $extract_folder) {
+    Write-Output "Folder $extract_folder already exists. Skipping extraction..."
+} else {
+    Expand-Archive -Path $zip_file -DestinationPath $extract_folder -Force
+    Write-Output "Extraction completed."
+}
 
-$installerPath = Join-Path $extract_folder $filename
-Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
-Write-Output "DaVinci Resolve installation completed."
+Write-Output "Starting DaVinci Resolve installer..."
+$installerPath = Join-Path $extract_folder $installerExe
+
+# Launch the installer (without any silent switch)
+$installerProc = Start-Process -FilePath $installerPath -PassThru
+
+# Wait and search for the MSI file in the Temp directory
+$tempFolder = [System.IO.Path]::GetTempPath()
+Write-Output "Searching for ResolveInstaller.msi in $tempFolder..."
+$msiFound = $null
+$maxWait = 60  # maximum wait time in seconds
+$elapsed = 0
+
+while ($elapsed -lt $maxWait -and !$msiFound) {
+    Start-Sleep -Seconds 2
+    $msiFound = Get-ChildItem -Path $tempFolder -Filter "ResolveInstaller.msi" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    $elapsed += 2
+}
+
+if ($msiFound) {
+    $msiPath = $msiFound.FullName
+    Write-Output "Found MSI installer at $msiPath. Launching silent MSI installation..."
+    $logFile = "$download_folder\ResolveInstall.log"
+    Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /qn /log `"$logFile`" ALLUSERS=1 REBOOT=ReallySuppress" -Wait
+    Write-Output "MSI installation completed."
+} else {
+    Write-Error "ResolveInstaller.msi was not found in $tempFolder within $maxWait seconds."
+}
+
+# Close the original installer if it's still running
+if (!$installerProc.HasExited) {
+    Write-Output "Closing the original installer process..."
+    $installerProc | Stop-Process -Force
+} else {
+    Write-Output "Original installer process has already exited."
+}
+
+Write-Output "DaVinci Resolve installation process is complete."
