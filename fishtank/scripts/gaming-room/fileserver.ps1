@@ -1,37 +1,36 @@
 $ScriptContent = @"
-# Define network drive mappings
+# Map network drives silently
 `$Drives = @(
-    @{Letter="T"; Path="\\10.5.0.5\Transfer"; User="guest"; Password="" }
-    @{Letter="R"; Path="\\10.5.0.5\Ressurser"; User="guest"; Password="" }
-    @{Letter="S"; Path="\\10.5.0.5\Spill"; User="guest"; Password="" }
+    @{Letter="T"; Path="\\\\10.5.0.5\\Transfer"; User="guest"; Password="" }
+    @{Letter="R"; Path="\\\\10.5.0.5\\Ressurser"; User="guest"; Password="" }
+    @{Letter="S"; Path="\\\\10.5.0.5\\Spill"; User="guest"; Password="" }
 )
 
-# Iterate through each drive and map it
 foreach (`$Drive in `$Drives) {
-    # Remove existing drive mapping if present
     if (Test-Path "`$(`$Drive.Letter):\") {
-        Write-Output "Drive `$(`$Drive.Letter): already mapped. Skipping..."
+        # Already mapped
     } else {
-        Write-Output "Mapping `$(`$Drive.Letter): to `$(`$Drive.Path)..."
-        net use "`$(`$Drive.Letter):" "`$(`$Drive.Path)" /user:"`$(`$Drive.User)" "`$(`$Drive.Password)" /persistent:yes
+        net use "`$(`$Drive.Letter):" "`$(`$Drive.Path)" /user:"`$(`$Drive.User)" "`$(`$Drive.Password)" /persistent:yes > `$null 2>&1
     }
 }
-
-Write-Output "All drives mapped successfully."
 "@
 
-# Write the script content to a file
+# Save script
 $ScriptPath = "C:\ProgramData\map_drives.ps1"
-Set-Content -Path $ScriptPath -Value $ScriptContent
+Set-Content -Path $ScriptPath -Value $ScriptContent -Force
 
-# Create a scheduled task to map network drives at user login
+# Create a hidden scheduled task to run at user login
 $TaskName = "MapDrives"
-$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File $ScriptPath" -WorkingDirectory "C:\ProgramData"
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ScriptPath`""
 $Trigger = New-ScheduledTaskTrigger -AtLogOn
-$Principal = New-ScheduledTaskPrincipal -UserId "INTERACTIVE" -LogonType InteractiveToken
-$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -DontStopOnIdleEnd -StartWhenAvailable
+$UsersGroup = Get-LocalGroup | Where-Object { $_.SID -eq "S-1-5-32-545" }
+$Principal = New-ScheduledTaskPrincipal -GroupId "$UsersGroup" -LogonType InteractiveToken
+$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -StartWhenAvailable -Hidden
 
+# Remove if exists
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+
+# Register new one
 Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings
 
-Write-Output "Scheduled task '$TaskName' created successfully to map network drives on login."
+Write-Output "Silent login task '$TaskName' created successfully."
