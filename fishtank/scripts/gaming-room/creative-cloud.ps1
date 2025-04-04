@@ -1,1 +1,1 @@
-winget install --id=Adobe.CreativeCloud  -e
+winget install --id=Adobe.CreativeCloud -e --accept-source-agreements --accept-package-agreements
