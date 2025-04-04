@@ -67,4 +67,19 @@ if (!$installerProc.HasExited) {
     Write-Output "Original installer process has already exited."
 }
 
+# Remove the downloaded zip file and extracted folder
+if (Test-Path $zip_file) {
+    Remove-Item -Path $zip_file -Force
+    Write-Output "Removed downloaded zip file: $zip_file"
+} else {
+    Write-Output "Zip file $zip_file not found. Skipping removal..."
+}
+
+if (Test-Path $extract_folder) {
+    Remove-Item -Path $extract_folder -Recurse -Force
+    Write-Output "Removed extracted folder: $extract_folder"
+} else {
+    Write-Output "Extracted folder $extract_folder not found. Skipping removal..."
+}
+
 Write-Output "DaVinci Resolve installation process is complete."
