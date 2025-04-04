@@ -1,1 +1,33 @@
-# TODO
+<?xml version="1.0" encoding="utf-8"?>
+<UninstallList xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Filters>
+    <Filter>
+      <Name>McAfee</Name>
+      <Exclude>false</Exclude>
+      <ComparisonEntries>
+        <FilterCondition>
+          <InvertResults>false</InvertResults>
+          <ComparisonMethod>Contains</ComparisonMethod>
+          <FilterText>McAfee</FilterText>
+          <TargetPropertyId>Publisher</TargetPropertyId>
+          <Enabled>true</Enabled>
+        </FilterCondition>
+      </ComparisonEntries>
+      <Enabled>true</Enabled>
+    </Filter>
+    <Filter>
+      <Name>Lenovo Vantage</Name>
+      <Exclude>false</Exclude>
+      <ComparisonEntries>
+        <FilterCondition>
+          <InvertResults>false</InvertResults>
+          <ComparisonMethod>Equals</ComparisonMethod>
+          <FilterText>Lenovo Vantage</FilterText>
+          <TargetPropertyId>DisplayName</TargetPropertyId>
+          <Enabled>true</Enabled>
+        </FilterCondition>
+      </ComparisonEntries>
+      <Enabled>true</Enabled>
+    </Filter>
+  <Enabled>true</Enabled>
+</UninstallList>
