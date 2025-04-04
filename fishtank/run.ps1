@@ -7,8 +7,14 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 # Ensure we are using PowerShell 7+
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Output "PowerShell >7 is required. Installing..."
-
     winget install --id Microsoft.Powershell --source winget -e --accept-source-agreements --accept-package-agreements
+}
+
+# If we aren't running from a "pwsh" shell, we need to restart the script with "pwsh"
+if ($PSVersionTable.PSEdition -ne "Core") {
+    Write-Output "Restarting script with PowerShell Core..."
+    Start-Process -FilePath "pwsh" -ArgumentList "-NoProfile", "-ExecutionPolicy Bypass", "-File", $MyInvocation.MyCommand.Path
+    exit
 }
 
 function yn_prompt($prompt) {
