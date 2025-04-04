@@ -7,7 +7,7 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 # Ensure we are using PowerShell 7+
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Output "PowerShell >7 is required. Installing..."
-    winget install --id Microsoft.Powershell --source winget -e --accept-source-agreements --accept-package-agreements
+    winget install --id Microsoft.PowerShell --source winget -e --accept-source-agreements --accept-package-agreements
 }
 
 # If we aren't running from a "pwsh" shell, we need to restart the script with "pwsh"
@@ -15,6 +15,12 @@ if ($PSVersionTable.PSEdition -ne "Core") {
     Write-Output "Restarting script with PowerShell Core..."
     Start-Process -FilePath "pwsh" -ArgumentList "-NoProfile", "-ExecutionPolicy Bypass", "-File", $MyInvocation.MyCommand.Path
     exit
+}
+
+# A function to start a script in a new cmd window
+function cmd_process($script) {
+    $cmd = "cmd.exe /c start cmd.exe /k pwsh -NoProfile -ExecutionPolicy Bypass -File `"$script`""
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "start", "cmd.exe", "/k", $cmd
 }
 
 function yn_prompt($prompt) {
@@ -58,7 +64,7 @@ $run_scripts         = yn_prompt "Run final scripts? (Debloat, auto-update, etc.
 $logout_after        = yn_prompt "Log out after installation?"
 
 Unblock-File choco-installer.ps1
-. .\choco-installer.ps1
+cmd_process .\choco-installer.ps1
 
 # Load blacklist entries (packages that should be pinned)
 $blacklistFile = "apps/autoupdate-blacklist.txt"
@@ -105,14 +111,15 @@ function execute_scripts_recursive($directory) {
     if (Test-Path $directory) {
         Get-ChildItem -Path $directory -Filter "*.ps1" |
         ForEach-Object -Parallel {
-            Unblock-File -Path $using:scriptPath
-            Write-Output "Running script: $using:scriptPath..."
-            & $using:scriptPath
-        } -ArgumentList $_.FullName -ThrottleLimit 8
+            Unblock-File -Path $_
+            Write-Output "Running script: $_..."
+            cmd_process $_
+        } -ThrottleLimit 8
     } else {
         Write-Output "Directory $directory does not exist. Skipping..."
     }
 }
+
 
 # Sunshine install
 if ($install_sunshine) {
