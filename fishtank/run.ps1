@@ -112,6 +112,9 @@ function execute_scripts_recursive($directory) {
     }
 }
 
+# Install apps/base.txt before proceeding
+install_choco_packages "apps/base.txt"
+
 if ($install_sunshine) {
     choco install -y sunshine
     $sunshine_binary = "C:\Program Files\Sunshine\sunshine.exe"

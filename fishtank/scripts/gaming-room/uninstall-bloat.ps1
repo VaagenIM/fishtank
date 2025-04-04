@@ -1,9 +1,18 @@
-# Helper function to uninstall an app silently if found
-function Uninstall-ByDisplayName {
+function BCUUninstall-ByDisplayName {
     param (
         [string]$NameMatch
     )
 
+    # Define the path to Bulk Crap Uninstaller installed via Chocolatey
+    $BCUPath = "C:\ProgramData\chocolatey\lib\bulk-crap-uninstaller\tools\BulkCrapUninstaller.exe"
+
+    # Check if the Bulk Crap Uninstaller executable exists
+    if (-not (Test-Path $BCUPath)) {
+        Write-Error "Bulk Crap Uninstaller not found at $BCUPath. Please verify the installation."
+        return
+    }
+
+    # Define the registry paths where uninstall information is stored
     $registryPaths = @(
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
         "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
@@ -11,33 +20,23 @@ function Uninstall-ByDisplayName {
 
     foreach ($path in $registryPaths) {
         $apps = Get-ItemProperty $path -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -like "*$NameMatch*" }
+                Where-Object { $_.DisplayName -like "*$NameMatch*" }
 
         foreach ($app in $apps) {
-            $uninstallCmd = $app.UninstallString
-            if ($uninstallCmd) {
-                Write-Host "Uninstalling $($app.DisplayName)..."
+            Write-Host "Initiating uninstallation of '$($app.DisplayName)' using Bulk Crap Uninstaller..."
+            # Build the command-line arguments:
+            # /u "DisplayName" tells BCU which program to uninstall
+            # /silent runs the process silently
+            $arguments = "/u `"$($app.DisplayName)`" /silent"
 
-                # Attempt to silently uninstall
-                if ($uninstallCmd -match "msiexec\.exe") {
-                    # Make sure /quiet or /qn is used
-                    $silentCmd = "$uninstallCmd /quiet /norestart"
-                } else {
-                    # Some EXE uninstallers might support /S or /quiet, but it's vendor-specific
-                    $silentCmd = "$uninstallCmd /S /quiet /norestart"
-                }
-
-                # TODO: Bypass prompts...
-                Start-Process -FilePath "cmd.exe" -ArgumentList "/c $silentCmd" -Wait -WindowStyle Hidden
-            }
+            # Start Bulk Crap Uninstaller with the specified arguments
+            Start-Process -FilePath $BCUPath -ArgumentList $arguments -Wait -WindowStyle Hidden
         }
     }
 }
 
-# Uninstall Lenovo Vantage
-Uninstall-ByDisplayName -NameMatch "Lenovo Vantage"
+# Example usage:
+BCUUninstall-ByDisplayName -NameMatch "Lenovo Vantage"
+BCUUninstall-ByDisplayName -NameMatch "McAfee"
 
-# Uninstall McAfee
-Uninstall-ByDisplayName -NameMatch "McAfee"
-
-Write-Output "McAfee and Lenovo Vantage have been uninstalled."
+Write-Output "Bulk uninstallation process has been initiated for matching applications."
