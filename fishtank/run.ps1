@@ -119,6 +119,32 @@ if ($install_sunshine) {
     Start-Process -FilePath $sunshine_binary -ArgumentList $sunshine_creds -WindowStyle Hidden -Wait
     Stop-Process -Name "sunshine" -Force -ErrorAction SilentlyContinue
     Start-Process -FilePath $sunshine_binary -ArgumentList $sunshine_creds -WindowStyle Hidden
+
+    $firewall_rules = @(
+        @{ Name = "Sunshine TCP 47984"; Port = 47984; Protocol = "TCP" },
+        @{ Name = "Sunshine TCP 47989"; Port = 47989; Protocol = "TCP" },
+        @{ Name = "Sunshine TCP 48010"; Port = 48010; Protocol = "TCP" },
+        @{ Name = "Sunshine UDP 47998"; Port = 47998; Protocol = "UDP" },
+        @{ Name = "Sunshine UDP 47999"; Port = 47999; Protocol = "UDP" },
+        @{ Name = "Sunshine UDP 48000"; Port = 48000; Protocol = "UDP" },
+    )
+
+    foreach ($rule in $firewall_rules) {
+        $ruleName = $rule.Name
+        $port = $rule.Port
+        $protocol = $rule.Protocol
+
+        # Check if the rule already exists
+        $existingRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+
+        if (-not $existingRule) {
+            Write-Output "Creating firewall rule: $ruleName for port $port ($protocol)..."
+            New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol $protocol -LocalPort $port -Profile Any
+        } else {
+            Write-Output "Firewall rule: $ruleName already exists. Skipping..."
+        }
+    }
+
 }
 
 if ($install_common) {
