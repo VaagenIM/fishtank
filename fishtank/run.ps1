@@ -4,6 +4,13 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     exit
 }
 
+# Ensure we are using PowerShell 7+
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    Write-Output "PowerShell >7 is required. Installing..."
+
+    winget install --id Microsoft.Powershell --source winget -e --accept-source-agreements --accept-package-agreements
+}
+
 function yn_prompt($prompt) {
     $response = Read-Host -prompt "$prompt (Y/n)"
     if ($response -eq "y" -or $response -eq "") {
