@@ -1,9 +1,9 @@
 $ScriptContent = @"
 # Map network drives silently
 `$Drives = @(
-    @{Letter="T"; Path="\\\\10.5.0.5\\Transfer"; User="guest"; Password="" }
-    @{Letter="R"; Path="\\\\10.5.0.5\\Ressurser"; User="guest"; Password="" }
-    @{Letter="S"; Path="\\\\10.5.0.5\\Spill"; User="guest"; Password="" }
+    @{Letter="T"; Path="\\10.5.0.5\Transfer"; User="guest"; Password="" }
+    @{Letter="R"; Path="\\10.5.0.5\Ressurser"; User="guest"; Password="" }
+    @{Letter="S"; Path="\\10.5.0.5\Spill"; User="guest"; Password="" }
 )
 
 foreach (`$Drive in `$Drives) {
