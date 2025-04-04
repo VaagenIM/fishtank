@@ -43,7 +43,7 @@ $install_common = yn_prompt "Install common software?"
 $install_dev = yn_prompt "Install developer software?"
 $install_gaming_room = yn_prompt "Install gaming room software? (Adds a user, ollama, wallpaper, and maps network drives)"
 $install_scripts = yn_prompt "Install scripts? (Debloat, auto-update, etc.)"
-$logout_after = yn_prompt "Log out after installation?"
+$reboot_after = yn_prompt "Reboot after installation?"
 
 Unblock-File choco-installer.ps1
 . .\choco-installer.ps1
@@ -168,11 +168,11 @@ if ($install_scripts) {
 
 Write-Output "Fishtank is set up!"
 
-if ($logout_after) {
-    Write-Output "Logging out in 5 seconds..."
-    Start-Sleep -Seconds 5
-    shutdown /l
+if ($reboot_after) {
+    Write-Output "Rebooting in 15 seconds..."
+    Start-Sleep -Seconds 15
+    Restart-Computer -Force
 }
 
-# If we aren't logging out, we can just pause the script to let the user see the output
+# If we aren't restarting out, we can just pause the script to let the user see the output
 pause
