@@ -24,7 +24,6 @@ if ($set_password) {
         exit
     }
 
-    # Set the current user's password to the entered password
     $UserAccount = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
     $UserAccount = $UserAccount -replace ".*\\", ""
     $UserAccount | Set-LocalUser -Password $pw
@@ -42,7 +41,7 @@ if ($install_sunshine) {
 $install_common      = yn_prompt "Install common software?"
 $install_dev         = yn_prompt "Install developer software?"
 $install_gaming_room = yn_prompt "Install gaming room software? (Adds a user, ollama, wallpaper, and maps network drives)"
-$install_scripts     = yn_prompt "Install scripts? (Debloat, auto-update, etc.)"
+$run_scripts         = yn_prompt "Run final scripts? (Debloat, auto-update, etc.)"
 $logout_after        = yn_prompt "Log out after installation?"
 
 Unblock-File choco-installer.ps1
@@ -56,130 +55,81 @@ if (Test-Path $blacklistFile) {
     $blacklist = @()
 }
 
-# Function: Process package files in a directory (runs installations concurrently per file)
-function install_choco_packages_recursive($directory) {
-    # Function: Install packages from a text file concurrently for each package
-    function install_choco_packages($file) {
-        Write-Output "Installing packages from $file..."
-        $c_jobs = @()
-        Get-Content $file | Where-Object { ($_ -notmatch "^#|^$") -and ($_ -match "\S") } | ForEach-Object {
-            $packageName = ($_ -replace "#.*", "").Trim()
-            # Check if package is already installed
-            $isInstalled = choco list --local-only | Select-String "^$packageName\s"
-            if (-not $isInstalled) {
-                Write-Output "Scheduling installation for $packageName..."
-                $job = Start-Job -ScriptBlock {
-                    param($pkg)
-                    choco install -y --ignore-checksums $pkg
-                } -ArgumentList $packageName
-                $c_jobs += $job
-            } else {
-                Write-Output "$packageName is already installed. Skipping installation..."
-            }
-            # If the package is in the blacklist, pin it
-            if ($blacklist -contains $packageName) {
-                Write-Output "Pinning $packageName to suppress upgrades..."
-                choco pin add -n $packageName
-            }
-        }
-        if ($c_jobs.Count -gt 0) {
-            Write-Output "Waiting for package installation jobs to complete for file $file..."
-            $c_jobs | Wait-Job | Out-Null
-            $c_jobs | ForEach-Object { Receive-Job $_ | Write-Output }
-        }
-    }
+function install_choco_packages($file) {
+    Write-Output "Installing packages from $file..."
+    $packages = Get-Content $file | Where-Object { ($_ -notmatch "^#|^$") -and ($_ -match "\S") }
 
+    $packages | ForEach-Object -Parallel {
+        $packageName = ($_ -replace "#.*", "").Trim()
+        $isInstalled = choco list --local-only | Select-String "^$packageName\s"
+        if (-not $isInstalled) {
+            Write-Output "Installing $packageName..."
+            choco install -y --ignore-checksums $packageName
+        } else {
+            Write-Output "$packageName already installed. Skipping..."
+        }
+
+        if ($using:blacklist -contains $packageName) {
+            Write-Output "Pinning $packageName to suppress upgrades..."
+            choco pin add -n $packageName
+        }
+    } -ThrottleLimit 8
+}
+
+function install_choco_packages_recursive($directory) {
     Write-Output "Processing package files in $directory..."
     if (Test-Path $directory) {
-        $jobs = @()
         Get-ChildItem -Path $directory -Filter "*.txt" | ForEach-Object {
-            Write-Output "Scheduling package installations from $($_.FullName)..."
-            $job = Start-Job -ScriptBlock {
-                param($file)
-                install_choco_packages $file
-            } -ArgumentList $_.FullName
-            $jobs += $job
-        }
-        if ($jobs.Count -gt 0) {
-            Write-Output "Waiting for all package file jobs in $directory to complete..."
-            $jobs | Wait-Job | Out-Null
-            $jobs | ForEach-Object { Receive-Job $_ | Write-Output }
+            install_choco_packages $_.FullName
         }
     } else {
         Write-Output "Directory $directory does not exist. Skipping..."
     }
 }
 
-# Function: Execute scripts (runs each script concurrently)
 function execute_scripts_recursive($directory) {
     Write-Output "Executing scripts in $directory..."
-    $jobs = @()
     if (Test-Path $directory) {
-        Get-ChildItem -Path $directory -Filter "*.ps1" | ForEach-Object {
-            Write-Output "Scheduling execution for script: $($_.FullName)..."
-            Unblock-File -Path $_.FullName
-            $job = Start-Job -ScriptBlock {
-                param($scriptPath)
-                & $scriptPath
-            } -ArgumentList $_.FullName
-            $jobs += $job
-        }
-        if ($jobs.Count -gt 0) {
-            Write-Output "Waiting for script execution jobs in $directory to complete..."
-            $jobs | Wait-Job | Out-Null
-            $jobs | ForEach-Object { Receive-Job $_ | Write-Output }
-        }
+        Get-ChildItem -Path $directory -Filter "*.ps1" |
+        ForEach-Object -Parallel {
+            Unblock-File -Path $using:scriptPath
+            Write-Output "Running script: $using:scriptPath..."
+            & $using:scriptPath
+        } -ArgumentList $_.FullName -ThrottleLimit 8
     } else {
         Write-Output "Directory $directory does not exist. Skipping..."
     }
 }
 
-# --- Sunshine Installation (runs in its own process) ---
+# Sunshine install
 if ($install_sunshine) {
-    Write-Output "Installing sunshine in a separate process..."
-    $sunshineJob = Start-Job -ScriptBlock {
-        choco install -y sunshine
-    }
-    $sunshineJob | Wait-Job | Out-Null
-    Remove-Job $sunshineJob
+    Write-Output "Installing sunshine..."
+    choco install -y sunshine
 
     $sunshine_binary = "C:\Program Files\Sunshine\sunshine.exe"
     $sunshine_creds = "--creds `"$sunshine_uname`" `"$sunshine_password_clean`""
+
     Start-Process -FilePath $sunshine_binary -ArgumentList $sunshine_creds -WindowStyle Hidden -Wait
     Stop-Process -Name "sunshine" -Force -ErrorAction SilentlyContinue
     Start-Process -FilePath $sunshine_binary -ArgumentList $sunshine_creds -WindowStyle Hidden
 }
 
-# --- Run Package Installations and Script Executions Concurrently ---
-$jobs = @()
-
+# Install groups
 if ($install_common) {
-    $jobs += Start-Job -ScriptBlock { install_choco_packages_recursive "apps/common" }
-    $jobs += Start-Job -ScriptBlock { execute_scripts_recursive "scripts/common" }
+    install_choco_packages_recursive "apps/common"
+    execute_scripts_recursive "scripts/common"
 }
-
 if ($install_dev) {
-    $jobs += Start-Job -ScriptBlock { install_choco_packages_recursive "apps/dev" }
-    $jobs += Start-Job -ScriptBlock { execute_scripts_recursive "scripts/dev" }
+    install_choco_packages_recursive "apps/dev"
+    execute_scripts_recursive "scripts/dev"
 }
-
 if ($install_gaming_room) {
-    $jobs += Start-Job -ScriptBlock { install_choco_packages_recursive "apps/gaming-room" }
-    $jobs += Start-Job -ScriptBlock { execute_scripts_recursive "scripts/gaming-room" }
+    install_choco_packages_recursive "apps/gaming-room"
+    execute_scripts_recursive "scripts/gaming-room"
 }
 
-
-if ($jobs.Count -gt 0) {
-    Write-Output "Waiting for all package and script jobs to complete..."
-    $jobs | Wait-Job | Out-Null
-    $jobs | ForEach-Object { Receive-Job $_ | Write-Output }
-}
-
-# Catch-all wait (if any stray jobs remain)
-Get-Job | Wait-Job | Out-Null
-Write-Output "All package installations and script executions completed."
-
-if ($install_scripts) {
+# Run scripts
+if ($run_scripts) {
     Write-Output "Running final script executions... (cleanup, debloat, etc.)"
     execute_scripts_recursive "scripts"
 }
