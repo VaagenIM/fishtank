@@ -1,3 +1,10 @@
+# Check if DaVinci is already installed, if it is, skip the installation
+$installed = Get-Command "C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe" -ErrorAction SilentlyContinue
+if ($installed) {
+    Write-Output "DaVinci Resolve is already installed. Skipping installation..."
+    exit
+}
+
 # Install and configure DaVinci Resolve
 $davinci_filename = "DaVinci_Resolve_19.1.4_Windows"
 $download_url = "https://apps.iktim.no/Software/Windows/$davinci_filename.zip"
