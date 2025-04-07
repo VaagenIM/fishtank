@@ -2,7 +2,7 @@
 $bculFile = Join-Path -Path $PSScriptRoot -ChildPath "uninstall.bcul"
 
 # Define path to BCU-console.exe installed via Chocolatey
-$BCUConsolePath = "C:\ProgramData\chocolatey\lib\bulk-crap-uninstaller\tools\BCU-console.exe"
+$BCUConsolePath = "C:\Program Files\BCUninstaller\win-x64\BCU-console.exe"
 
 # Validate BCU-console exists
 if (-not (Test-Path $BCUConsolePath)) {
