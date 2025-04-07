@@ -34,19 +34,13 @@ Copy-Item -Path $SourceWallpaper -Destination $DestinationWallpaper -Force
 Copy-Item -Path $SourceLockscreenWallpaper -Destination $DestinationLockscreenWallpaper -Force
 
 # Create a PowerShell script that will be executed on the first login to configure the user profile
-$ScriptPath = "C:\ProgramData\FirstLoginConfig.ps1"
+$ScriptPath = "C:\ProgramData\UserConfig.ps1"
 $ScriptContent = @"
 # Get the SID of the user "$Username"
 `$userSID = (Get-LocalUser -Name "$Username").SID.Value
 
 # Reset the password to empty, just for good measure
 Set-LocalUser -name "$Username" -Password ([securestring]::new())
-
-# Set the registry keys for disabling password change for the user
-New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Force
-Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name DisableChangePassword -Value 1
-New-Item -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Force
-Set-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name DisableChangePassword -Value 1
 
 # Set the wallpaper for the user by SID (directly modifying the registry)
 Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Control Panel\Desktop" -Name WallPaper -Value "$DestinationWallpaper"
@@ -84,10 +78,6 @@ Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Policies\Microso
 # Disable the ability to change the lock screen slideshow settings (if applicable)
 New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Policies\Microsoft\Windows\Personalization" -Force
 Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Policies\Microsoft\Windows\Personalization" -Name NoLockScreenSlideshow -Value 1
-
-# Disable user from setting their own password hint
-New-Item -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Force
-Set-ItemProperty -Path "Registry::HKEY_USERS\`$userSID\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name NoPasswordHints -Value 1
 
 if (Test-Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Lenovo") {
     # Target Lenovo-specific registry policies if applicable
@@ -132,11 +122,23 @@ $TaskName = "ApplySettings_$Username"
 $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File $ScriptPath" -WorkingDirectory "C:\ProgramData"
 $StartupTrigger = New-ScheduledTaskTrigger -AtStartup
 $LogonTrigger = New-ScheduledTaskTrigger -AtLogon
+
+# Trigger to run every 30 minutes indefinitely
+$RepetitionTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddMinutes(1)
+$RepetitionTrigger.RepetitionInterval = '00:30:00'
+$RepetitionTrigger.RepetitionDuration = ([TimeSpan]::MaxValue)  # Infinite duration
+
 $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -DontStopOnIdleEnd -StartWhenAvailable
+
+# Clean up any existing tasks
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
-Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $StartupTrigger -Principal $Principal -Settings $Settings
 Unregister-ScheduledTask -TaskName "$TaskName-Logon" -Confirm:$false -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskName "$TaskName-Repeat" -Confirm:$false -ErrorAction SilentlyContinue
+
+# Register the tasks
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $StartupTrigger -Principal $Principal -Settings $Settings
 Register-ScheduledTask -TaskName "$TaskName-Logon" -Action $Action -Trigger $LogonTrigger -Principal $Principal -Settings $Settings
+Register-ScheduledTask -TaskName "$TaskName-Repeat" -Action $Action -Trigger $RepetitionTrigger -Principal $Principal -Settings $Settings
 
 Write-Output "Scheduled task '$TaskName' created successfully."
