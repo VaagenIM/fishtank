@@ -16,10 +16,7 @@ if (-not (Test-Path $bculFile)) {
     exit 1
 }
 
-# Build argument string to uninstall using the .bcul file silently
-$arguments = "uninstall `"$bculFile`" /Q /U /J=VeryGood"
-
 Write-Host "Running BCU-console with uninstall list: $bculFile"
-Start-Process -FilePath $BCUConsolePath -ArgumentList $arguments -Wait -WindowStyle Hidden
+& $BCUConsolePath uninstall `"$bculFile`" /Q /U /J=VeryGood
 
 Write-Output "Finished uninstalling applications listed in $bculFile."
