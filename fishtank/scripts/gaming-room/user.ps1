@@ -123,10 +123,10 @@ $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-Executio
 $StartupTrigger = New-ScheduledTaskTrigger -AtStartup
 $LogonTrigger = New-ScheduledTaskTrigger -AtLogon
 
-# Trigger to run every 30 minutes indefinitely
-$RepetitionTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddMinutes(1)
-$RepetitionTrigger.RepetitionInterval = '00:30:00'
-$RepetitionTrigger.RepetitionDuration = ([TimeSpan]::MaxValue)  # Infinite duration
+# Correctly create a trigger that repeats every 30 minutes indefinitely
+$RepetitionTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddMinutes(1) `
+    -RepetitionInterval (New-TimeSpan -Minutes 30) `
+    -RepetitionDuration ([TimeSpan]::MaxValue)
 
 $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -DontStopOnIdleEnd -StartWhenAvailable
