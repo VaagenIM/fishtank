@@ -223,7 +223,7 @@ $jobs += Start-InstallJob -appFolder "apps/base" -scriptFolder $null -blacklist 
 if ($jobs.Count -gt 0) {
     Write-Output "Waiting for base installation jobs to complete..."
     $jobs | ForEach-Object { Wait-Job $_ }
-    $jobs | ForEach-Object { Receive-Job $_; Remove-Job $_ }
+    $jobs | ForEach-Object { $jobOutput = Receive-Job $_; Write-Output $jobOutput; Remove-Job $_ }
 }
 
 if ($install_sunshine) {
@@ -278,7 +278,7 @@ if ($install_gaming_room) {
 if ($jobs.Count -gt 0) {
     Write-Output "Waiting for installation jobs to complete..."
     $jobs | ForEach-Object { Wait-Job $_ }
-    $jobs | ForEach-Object { Receive-Job $_; Remove-Job $_ }
+    $jobs | ForEach-Object { $jobOutput = Receive-Job $_; Write-Output $jobOutput; Remove-Job $_ }
 }
 
 if ($install_scripts) {
@@ -287,7 +287,7 @@ if ($install_scripts) {
     if ($jobs.Count -gt 0) {
         Write-Output "Waiting for scripts to complete..."
         $jobs | ForEach-Object { Wait-Job $_ }
-        $jobs | ForEach-Object { Receive-Job $_; Remove-Job $_ }
+        $jobs | ForEach-Object { $jobOutput = Receive-Job $_; Write-Output $jobOutput; Remove-Job $_ }
     }
 }
 
