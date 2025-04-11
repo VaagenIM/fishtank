@@ -13,37 +13,98 @@ function yn_prompt($prompt) {
     }
 }
 
-$set_password = yn_prompt "Set a password for this admin account?"
+# Initialize options
+override $options = @{
+    set_password         = $null
+    install_sunshine     = $null
+    install_common       = $null
+    install_dev          = $null
+    install_gaming_room  = $null
+    install_scripts      = $null
+    reboot_after         = $null
+    userpw               = $null
+    sunshine_uname       = $null
+    sunshine_password    = $null
+}
 
-if ($set_password) {
-    $pw = Read-Host -AsSecureString -Prompt "Enter a password"
-    $pw2 = Read-Host -AsSecureString -Prompt "Re-enter the password"
+# Parse command-line arguments
+foreach ($arg in $args) {
+    switch -Wildcard ($arg) {
+        "--no-user"            { $options.set_password = $false }
+        "--no-sunshine"        { $options.install_sunshine = $false }
+        "--all" {
+            $options.install_common = $true
+            $options.install_dev = $true
+            $options.install_gaming_room = $true
+            $options.install_scripts = $true
+            $options.reboot_after = $true
+        }
+        "--userpw=*" {
+            $options.userpw = $arg -replace "--userpw=", ""
+            $options.set_password = $true
+        }
+        "--sunshine-creds=*" {
+            $creds = $arg -replace "--sunshine-creds=", ""
+            $parts = $creds -split ":", 2
+            if ($parts.Length -eq 2) {
+                $options.sunshine_uname = $parts[0]
+                $options.sunshine_password = $parts[1]
+                $options.install_sunshine = $true
+            }
+        }
+        "--common"  { $options.install_common = $true }
+        "--dev"     { $options.install_dev = $true }
+        "--scripts" { $options.install_scripts = $true }
+        "--gaming"  { $options.install_gaming_room = $true}
+        "--restart" { $options.reboot_after = $true }
+    }
+}
+
+if ($options.set_password -eq $null) {
+    $options.set_password = yn_prompt "Set a password for this admin account?"
+}
+
+if ($options.set_password) {
+    $pw = if ($options.userpw) {
+        ConvertTo-SecureString $options.userpw -AsPlainText -Force
+    } else {
+        Read-Host -AsSecureString -Prompt "Enter a password"
+    }
+    $pw2 = if ($options.userpw) {
+        $pw
+    } else {
+        Read-Host -AsSecureString -Prompt "Re-enter the password"
+    }
 
     if ([System.Net.NetworkCredential]::new("", $pw).Password -ne [System.Net.NetworkCredential]::new("", $pw2).Password) {
         Write-Output "Passwords do not match. Exiting..."
         exit
     }
 
-    # Set the current users password to the entered password
-    $UserAccount = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $UserAccount = $UserAccount -replace ".*\\", ""
+    $UserAccount = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name -replace ".*\\", ""
     $UserAccount | Set-LocalUser -Password $pw
     Write-Output "Password set successfully."
 }
 
-$install_sunshine = yn_prompt "Install sunshine software for remote desktop?"
-
-if ($install_sunshine) {
-    $sunshine_uname = Read-Host -Prompt "Enter a username for the sunshine account"
-    $sunshine_password = Read-Host -AsSecureString -Prompt "Enter a password for the sunshine account"
-    $sunshine_password_clean = [System.Net.NetworkCredential]::new("", $sunshine_password).Password
+if ($options.install_sunshine -eq $null) {
+    $options.install_sunshine = yn_prompt "Install sunshine software for remote desktop?"
 }
 
-$install_common = yn_prompt "Install common software?"
-$install_dev = yn_prompt "Install developer software?"
-$install_gaming_room = yn_prompt "Install gaming room software? (Adds a user, ollama, wallpaper, and maps network drives)"
-$install_scripts = yn_prompt "Install scripts? (Debloat, auto-update, etc.)"
-$reboot_after = yn_prompt "Reboot after installation?"
+if ($options.install_sunshine) {
+    $options.sunshine_uname = $options.sunshine_uname ?? (Read-Host -Prompt "Enter a username for the sunshine account")
+    $secure_pw = if ($options.sunshine_password) {
+        ConvertTo-SecureString $options.sunshine_password -AsPlainText -Force
+    } else {
+        Read-Host -AsSecureString -Prompt "Enter a password for the sunshine account"
+    }
+    $options.sunshine_password = [System.Net.NetworkCredential]::new("", $secure_pw).Password
+}
+
+if ($options.install_common -eq $null) { $options.install_common = yn_prompt "Install common software?" }
+if ($options.install_dev -eq $null) { $options.install_dev = yn_prompt "Install developer software?" }
+if ($options.install_gaming_room -eq $null) { $options.install_gaming_room = yn_prompt "Install gaming room software?" }
+if ($options.install_scripts -eq $null) { $options.install_scripts = yn_prompt "Install scripts? (Debloat, auto-update, etc.)" }
+if ($options.reboot_after -eq $null) { $options.reboot_after = yn_prompt "Reboot after installation?" }
 
 Unblock-File choco-installer.ps1
 . .\choco-installer.ps1
