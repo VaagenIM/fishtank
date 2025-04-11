@@ -173,11 +173,56 @@ function execute_scripts_recursive($directory) {
     }
 }
 
-# Install apps/base.txt before proceeding
-install_choco_packages "apps/base.txt"
+function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
+    $jobs = @()
 
-# Run remove-bloat before proceeding
-execute_scripts_recursive "scripts/remove-bloat"
+    if ($appFolder -and (Test-Path $appFolder)) {
+        Get-ChildItem -Path $appFolder -Filter "*.txt" | ForEach-Object {
+            Get-Content $_.FullName | Where-Object { ($_ -notmatch "^#|^$") -and ($_ -match "\S") } | ForEach-Object {
+                $package = $_ -replace "#.*", ""
+                $package = $package.Trim()
+
+                $jobs += Start-Job -ScriptBlock {
+                    param($package, $blacklist)
+                    if (-not (choco list --local-only | Select-String "^$package\s")) {
+                        Write-Output "Installing $package..."
+                        choco install -y --ignore-checksums $package
+                    } else {
+                        Write-Output "$package is already installed. Skipping..."
+                    }
+
+                    if ($blacklist -contains $package) {
+                        Write-Output "Pinning $package..."
+                        choco pin add -n $package
+                    }
+                } -ArgumentList $package, $blacklist
+            }
+        }
+    }
+
+    if ($scriptFolder -and (Test-Path $scriptFolder)) {
+        $jobs += Start-Job -ScriptBlock {
+            param($folder)
+            Get-ChildItem -Path $folder -Filter "*.ps1" | ForEach-Object {
+                Write-Output "Running script: $($_.FullName)"
+                Unblock-File -Path $_.FullName
+                & $_.FullName
+            }
+        } -ArgumentList $scriptFolder
+    }
+
+    return $jobs
+}
+
+$jobs = @()
+
+$jobs += Start-InstallJob -appFolder "apps/base" -scriptFolder "scripts/remove-bloat" -blacklist $blacklist
+
+if ($jobs.Count -gt 0) {
+    Write-Output "Waiting for base installation jobs to complete..."
+    $jobs | ForEach-Object { Wait-Job $_ }
+    $jobs | ForEach-Object { Receive-Job $_; Remove-Job $_ }
+}
 
 if ($install_sunshine) {
     choco install -y sunshine
@@ -214,23 +259,34 @@ if ($install_sunshine) {
 
 }
 
+$jobs = @()
+
 if ($install_common) {
-    install_choco_packages_recursive "apps/common"
-    execute_scripts_recursive "scripts/common"
+    $jobs += Start-InstallJob "apps/common" "scripts/common" $blacklist
 }
 
 if ($install_dev) {
-    install_choco_packages_recursive "apps/dev"
-    execute_scripts_recursive "scripts/dev"
+    $jobs += Start-InstallJob "apps/dev" "scripts/dev" $blacklist
 }
 
 if ($install_gaming_room) {
-    install_choco_packages_recursive "apps/gaming-room"
-    execute_scripts_recursive "scripts/gaming-room"
+    $jobs += Start-InstallJob "apps/gaming-room" "scripts/gaming-room" $blacklist
+}
+
+if ($jobs.Count -gt 0) {
+    Write-Output "Waiting for installation jobs to complete..."
+    $jobs | ForEach-Object { Wait-Job $_ }
+    $jobs | ForEach-Object { Receive-Job $_; Remove-Job $_ }
 }
 
 if ($install_scripts) {
-    execute_scripts_recursive "scripts"
+    $jobs = @()
+    $jobs += Start-InstallJob $null "scripts"
+    if ($jobs.Count -gt 0) {
+        Write-Output "Waiting for scripts to complete..."
+        $jobs | ForEach-Object { Wait-Job $_ }
+        $jobs | ForEach-Object { Receive-Job $_; Remove-Job $_ }
+    }
 }
 
 Write-Output "Fishtank is set up!"
