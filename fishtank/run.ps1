@@ -91,7 +91,7 @@ if ($options.install_sunshine -eq $null) {
 }
 
 if ($options.install_sunshine) {
-    $options.sunshine_uname = $options.sunshine_uname ?? (Read-Host -Prompt "Enter a username for the sunshine account")
+    $options.sunshine_uname = $options.sunshine_uname -or (Read-Host -Prompt "Enter a username for the sunshine account")
     $secure_pw = if ($options.sunshine_password) {
         ConvertTo-SecureString $options.sunshine_password -AsPlainText -Force
     } else {
