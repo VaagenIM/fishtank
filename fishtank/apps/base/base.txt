@@ -1,1 +1,1 @@
-bulk-crap-uninstaller
+# Add apps that should apply to any tanker in here

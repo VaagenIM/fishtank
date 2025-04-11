@@ -1,3 +1,4 @@
+choco install -y bulk-crap-uninstaller
 # Define the path to the .bcul uninstall list (in the same directory as the script)
 $bculFile = Join-Path -Path $PSScriptRoot -ChildPath "uninstall.bcul"
 

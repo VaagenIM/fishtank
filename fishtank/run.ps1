@@ -216,10 +216,11 @@ function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
     return $jobs
 }
 
+
+execute_scripts_recursive "scripts/remove-bloat"
+
 $jobs = @()
-
-$jobs += Start-InstallJob -appFolder "apps/base" -scriptFolder "scripts/remove-bloat" -blacklist $blacklist
-
+$jobs += Start-InstallJob -appFolder "apps/base" -scriptFolder $null -blacklist $blacklist
 if ($jobs.Count -gt 0) {
     Write-Output "Waiting for base installation jobs to complete..."
     $jobs | ForEach-Object { Wait-Job $_ }
