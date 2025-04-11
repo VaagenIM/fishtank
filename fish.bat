@@ -1,15 +1,8 @@
 @echo off
-:: Set CWD to the script's directory
-cd /d "%~dp0/fishtank"
 
-:: Check for admin rights
-NET SESSION >nul 2>&1
-IF %ERRORLEVEL% NEQ 0 (
-    echo Requesting administrative privileges...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-        "Start-Process -FilePath '%~f0' -Verb RunAs"
-    exit
-)
+::
+:: Gaming room installer
+::
 
 :: Prompt for password
 set /p USERPW=Enter a password for the user and sunshine account:
@@ -17,12 +10,32 @@ set /p USERPW=Enter a password for the user and sunshine account:
 :: Prompt for sunshine username
 set /p SUNUSER=Enter a username for the sunshine account:
 
-:: Unblock the script
-powershell -Command "Unblock-File -Path run.ps1"
+:: Define paths
+set "zipPath=%USERPROFILE%\Desktop\fishtank.zip"
+set "extractPath=%USERPROFILE%\Desktop\fishtank-main"
 
-:: Run the PowerShell script with --all and credentials
-powershell -ExecutionPolicy Unrestricted -File run.ps1 ^
-  --all --userpw="%USERPW%" --sunshine-creds="%SUNUSER%:%USERPW%"
+:: Delete old fishtank-main if it exists
+if exist "%extractPath%" (
+    echo Deleting existing folder: %extractPath%
+    rmdir /s /q "%extractPath%"
+)
 
-echo Script execution completed.
-pause
+:: Download the ZIP file
+echo Downloading fishtank.zip...
+curl -L -o "%zipPath%" "https://github.com/VaagenIM/fishtank/archive/refs/heads/main.zip"
+
+:: Extract the ZIP file to the Desktop
+echo Extracting the ZIP file...
+powershell -Command "Expand-Archive -Path '%zipPath%' -DestinationPath '%USERPROFILE%\Desktop'"
+
+:: Remove the zip file
+echo Cleaning up...
+del "%zipPath%"
+
+:: Launch run.bat with args
+echo Running run.bat...
+start "" cmd /k "%extractPath%\run.bat" --all --userpw=%USERPW% --sunshine-creds=%SUNUSER%:%USERPW%
+
+:: End
+echo Deployment completed.
+exit
