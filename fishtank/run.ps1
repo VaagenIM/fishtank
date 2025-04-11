@@ -111,6 +111,11 @@ if ($options.reboot_after -eq $null) { $options.reboot_after = yn_prompt "Reboot
 Unblock-File choco-installer.ps1
 . .\choco-installer.ps1
 
+# Upgrade & update winget
+winget source reset
+winget source update
+winget upgrade winget
+
 # Load blacklist entries (packages that should be pinned)
 $blacklistFile = "apps/autoupdate-blacklist.txt"
 if (Test-Path $blacklistFile) {
