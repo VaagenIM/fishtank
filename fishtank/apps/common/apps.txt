@@ -1,6 +1,5 @@
 adobereader
 7zip
-winrar
 notepadplusplus
 vlc
 filezilla

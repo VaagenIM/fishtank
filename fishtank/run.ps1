@@ -115,6 +115,9 @@ function execute_scripts_recursive($directory) {
 # Install apps/base.txt before proceeding
 install_choco_packages "apps/base.txt"
 
+# Run remove-bloat before proceeding
+execute_scripts_recursive "scripts/remove-bloat"
+
 if ($install_sunshine) {
     choco install -y sunshine
     $sunshine_binary = "C:\Program Files\Sunshine\sunshine.exe"
