@@ -176,7 +176,7 @@ function execute_scripts_recursive($directory) {
 }
 
 function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
-    $_jobs = @()
+    $global:jobs = @()
 
     if ($appFolder -and (Test-Path $appFolder)) {
         Get-ChildItem -Path $appFolder -Filter "*.txt" | ForEach-Object {
@@ -184,7 +184,7 @@ function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
                 $package = $_ -replace "#.*", ""
                 $package = $package.Trim()
 
-                $_jobs += Start-Job -ScriptBlock {
+                $global:jobs += Start-Job -ScriptBlock {
                     param($package, $blacklist)
                     if (-not (choco list --local-only | Select-String "^$package\s")) {
                         Write-Output "Installing $package..."
@@ -203,7 +203,7 @@ function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
     }
 
     if ($scriptFolder -and (Test-Path $scriptFolder)) {
-        $_jobs += Start-Job -ScriptBlock {
+        $global:jobs += Start-Job -ScriptBlock {
             param($folder)
             Get-ChildItem -Path $folder -Filter "*.ps1" | ForEach-Object {
                 Write-Output "Running script: $($_.FullName)"
@@ -213,7 +213,7 @@ function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
         } -ArgumentList $scriptFolder
     }
 
-    return $_jobs
+    return $global:jobs
 }
 
 execute_scripts_recursive "scripts/remove-bloat"
@@ -226,7 +226,7 @@ if ($jobs.Count -gt 0) {
     $jobs | ForEach-Object { $jobOutput = Receive-Job $_; Write-Output $jobOutput; Remove-Job $_ }
 }
 
-if ($install_sunshine) {
+if ($options.install_sunshine) {
     choco install -y sunshine
     $sunshine_binary = "C:\Program Files\Sunshine\sunshine.exe"
     $sunshine_creds = "--creds `"$sunshine_uname`" `"$sunshine_password_clean`""
@@ -258,20 +258,19 @@ if ($install_sunshine) {
             Write-Output "Firewall rule: $ruleName already exists. Skipping..."
         }
     }
-
 }
 
 $jobs = @()
 
-if ($install_common) {
+if ($options.install_common) {
     $jobs += Start-InstallJob "apps/common" "scripts/common" $blacklist
 }
 
-if ($install_dev) {
+if ($options.install_dev) {
     $jobs += Start-InstallJob "apps/dev" "scripts/dev" $blacklist
 }
 
-if ($install_gaming_room) {
+if ($options.install_gaming_room) {
     $jobs += Start-InstallJob "apps/gaming-room" "scripts/gaming-room" $blacklist
 }
 
@@ -281,7 +280,7 @@ if ($jobs.Count -gt 0) {
     $jobs | ForEach-Object { $jobOutput = Receive-Job $_; Write-Output $jobOutput; Remove-Job $_ }
 }
 
-if ($install_scripts) {
+if ($options.install_scripts) {
     $jobs = @()
     $jobs += Start-InstallJob $null "scripts"
     if ($jobs.Count -gt 0) {
@@ -293,7 +292,7 @@ if ($install_scripts) {
 
 Write-Output "Fishtank is set up!"
 
-if ($reboot_after) {
+if ($options.reboot_after) {
     Write-Output "Rebooting in 15 seconds..."
     Start-Sleep -Seconds 15
     Restart-Computer -Force

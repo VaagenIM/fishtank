@@ -10,7 +10,7 @@ IF %ERRORLEVEL% NEQ 0 (
     set args=%*
     if defined args (
         powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-            "Start-Process -FilePath '%~f0' -Verb RunAs -ArgumentList '%args%'"
+            "Start-Process -FilePath '%~f0' -Verb RunAs -ArgumentList @('%args%')"
     ) else (
         powershell -NoProfile -ExecutionPolicy Bypass -Command ^
             "Start-Process -FilePath '%~f0' -Verb RunAs"
