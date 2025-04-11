@@ -186,6 +186,7 @@ function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
 
                 $global:jobs += Start-Job -ScriptBlock {
                     param($package, $blacklist)
+                    Set-Location -Path $PSScriptRoot
                     if (-not (choco list --local-only | Select-String "^$package\s")) {
                         Write-Output "Installing $package..."
                         choco install -y --ignore-checksums $package
@@ -205,6 +206,7 @@ function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
     if ($scriptFolder -and (Test-Path $scriptFolder)) {
         $global:jobs += Start-Job -ScriptBlock {
             param($folder)
+            Set-Location -Path $PSScriptRoot
             Get-ChildItem -Path $folder -Filter "*.ps1" | ForEach-Object {
                 Write-Output "Running script: $($_.FullName)"
                 Unblock-File -Path $_.FullName

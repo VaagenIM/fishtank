@@ -1,1 +1,2 @@
-# Add apps that should apply to any tanker in here
+# Add apps that should apply to any tanker in here, this gets installed before anything else
+vcredist-all

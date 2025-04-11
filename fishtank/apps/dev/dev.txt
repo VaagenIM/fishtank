@@ -17,4 +17,3 @@ godot
 # Runtimes
 dotnetfx
 javaruntime
-vcredist-all
