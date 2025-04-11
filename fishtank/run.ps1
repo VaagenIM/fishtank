@@ -176,7 +176,7 @@ function execute_scripts_recursive($directory) {
 }
 
 function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
-    $jobs = @()
+    $_jobs = @()
 
     if ($appFolder -and (Test-Path $appFolder)) {
         Get-ChildItem -Path $appFolder -Filter "*.txt" | ForEach-Object {
@@ -184,7 +184,7 @@ function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
                 $package = $_ -replace "#.*", ""
                 $package = $package.Trim()
 
-                $jobs += Start-Job -ScriptBlock {
+                $_jobs += Start-Job -ScriptBlock {
                     param($package, $blacklist)
                     if (-not (choco list --local-only | Select-String "^$package\s")) {
                         Write-Output "Installing $package..."
@@ -203,7 +203,7 @@ function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
     }
 
     if ($scriptFolder -and (Test-Path $scriptFolder)) {
-        $jobs += Start-Job -ScriptBlock {
+        $_jobs += Start-Job -ScriptBlock {
             param($folder)
             Get-ChildItem -Path $folder -Filter "*.ps1" | ForEach-Object {
                 Write-Output "Running script: $($_.FullName)"
@@ -213,7 +213,7 @@ function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
         } -ArgumentList $scriptFolder
     }
 
-    return $jobs
+    return $_jobs
 }
 
 execute_scripts_recursive "scripts/remove-bloat"
