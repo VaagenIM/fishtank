@@ -185,8 +185,8 @@ function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
                 $package = $package.Trim()
 
                 $global:jobs += Start-Job -ScriptBlock {
-                    param($package, $blacklist)
-                    Set-Location -Path $PSScriptRoot
+                    param($package, $blacklist, $scriptRoot)
+                    Set-Location -Path $scriptRoot
                     if (-not (choco list --local-only | Select-String "^$package\s")) {
                         Write-Output "Installing $package..."
                         choco install -y --ignore-checksums $package
@@ -198,21 +198,21 @@ function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
                         Write-Output "Pinning $package..."
                         choco pin add -n $package
                     }
-                } -ArgumentList $package, $blacklist
+                } -ArgumentList $package, $blacklist, $PSScriptRoot
             }
         }
     }
 
     if ($scriptFolder -and (Test-Path $scriptFolder)) {
         $global:jobs += Start-Job -ScriptBlock {
-            param($folder)
-            Set-Location -Path $PSScriptRoot
+            param($folder, $scriptRoot)
+            Set-Location -Path $scriptRoot
             Get-ChildItem -Path $folder -Filter "*.ps1" | ForEach-Object {
                 Write-Output "Running script: $($_.FullName)"
                 Unblock-File -Path $_.FullName
                 & $_.FullName
             }
-        } -ArgumentList $scriptFolder
+        } -ArgumentList $scriptFolder, $PSScriptRoot
     }
 
     return $global:jobs
