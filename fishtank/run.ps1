@@ -216,7 +216,6 @@ function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
     return $jobs
 }
 
-
 execute_scripts_recursive "scripts/remove-bloat"
 
 $jobs = @()

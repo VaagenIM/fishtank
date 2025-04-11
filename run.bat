@@ -7,8 +7,14 @@ cd /d "%~dp0/fishtank"
 NET SESSION >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
     echo Requesting administrative privileges...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-        "Start-Process -FilePath '%~f0' -Verb RunAs -ArgumentList '%*'"
+    set args=%*
+    if defined args (
+        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+            "Start-Process -FilePath '%~f0' -Verb RunAs -ArgumentList '%args%'"
+    ) else (
+        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+            "Start-Process -FilePath '%~f0' -Verb RunAs"
+    )
     exit
 )
 
