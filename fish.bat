@@ -4,11 +4,11 @@
 :: Gaming room installer
 ::
 
-:: Prompt for password
-set /p USERPW=Enter a password for the user and sunshine account:
-
 :: Prompt for sunshine username
 set /p SUNUSER=Enter a username for the sunshine account:
+
+:: Prompt for password
+set /p USERPW=Enter a password for the user and sunshine account:
 
 :: Define paths
 set "zipPath=%USERPROFILE%\Desktop\fishtank.zip"
