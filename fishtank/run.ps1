@@ -1,37 +1,155 @@
-# Ensure that the script is run as an administrator
-if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
-    Start-Process -Verb RunAs -FilePath PowerShell -ArgumentList "cd $((Get-Location).Path); .\$((Get-Item $MyInvocation.MyCommand.Path).Name) $args"
-    exit
+$ErrorActionPreference = "Stop"
+$scriptRoot = $PSScriptRoot
+Set-Location -LiteralPath $scriptRoot
+
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]::new($identity)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    $powershell = (Get-Command powershell.exe).Source
+    $arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"") + $args
+    Start-Process -FilePath $powershell -Verb RunAs -WorkingDirectory $scriptRoot -ArgumentList $arguments
+    exit 0
 }
 
-function yn_prompt($prompt) {
-    $response = Read-Host -prompt "$prompt (Y/n)"
-    if ($response -eq "y" -or $response -eq "") {
-        return $true
+$desktopPath = [Environment]::GetFolderPath("Desktop")
+$checklistPath = Join-Path $desktopPath "Fishtank-install-checklist.txt"
+$failures = [System.Collections.Generic.List[string]]::new()
+
+function Add-Failure([string]$Item, [string]$Details) {
+    $failures.Add("$Item :: $Details")
+}
+
+function Write-Checklist {
+    $header = @(
+        "# Fishtank installation checklist"
+        "# Generated: $(Get-Date -Format s)"
+    )
+    if ($failures.Count -eq 0) {
+        $content = $header + @("", "- [x] No failures were reported.")
     } else {
+        $content = $header + @(
+            "# Review these items before putting the machine into service."
+            ""
+        ) + ($failures | ForEach-Object { "- [ ] $_" })
+    }
+    $content | Set-Content -LiteralPath $checklistPath -Encoding UTF8
+    Write-Output "Installation checklist: $checklistPath"
+}
+
+function Read-YesNo([string]$Prompt) {
+    $response = Read-Host "$Prompt (Y/n)"
+    return [string]::IsNullOrWhiteSpace($response) -or $response -match "^(?i)y(es)?$"
+}
+
+function Get-RepoPath([string]$RelativePath) {
+    return Join-Path $scriptRoot $RelativePath
+}
+
+function Invoke-ScriptFile([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        Add-Failure $Path "Script file was not found."
+        return $false
+    }
+    try {
+        Write-Output "Running script: $Path"
+        Unblock-File -LiteralPath $Path -ErrorAction SilentlyContinue
+        $global:LASTEXITCODE = 0
+        & $Path
+        if ($LASTEXITCODE -ne 0) {
+            throw "Exited with code $LASTEXITCODE."
+        }
+        return $true
+    } catch {
+        Add-Failure $Path $_.Exception.Message
+        Write-Warning "Failed: $Path"
         return $false
     }
 }
 
-# Initialize options
-$options = @{
-    set_password         = $null
-    install_sunshine     = $null
-    install_common       = $null
-    install_dev          = $null
-    install_gaming_room  = $null
-    install_scripts      = $null
-    reboot_after         = $null
-    userpw               = $null
-    sunshine_uname       = $null
-    sunshine_password    = $null
+function Install-ChocoPackages([string]$File, [string[]]$Blacklist) {
+    if (-not (Test-Path -LiteralPath $File -PathType Leaf)) {
+        Add-Failure $File "Package list was not found."
+        return
+    }
+    if (-not (Get-Command choco.exe -ErrorAction SilentlyContinue)) {
+        Add-Failure $File "Chocolatey is not available."
+        return
+    }
+
+    Get-Content -LiteralPath $File |
+        Where-Object { $_ -notmatch "^\s*#" -and $_ -match "\S" } |
+        ForEach-Object {
+            $package = ($_ -replace "#.*", "").Trim()
+            try {
+                if (-not (choco.exe list --local-only --limit-output | Select-String -SimpleMatch "$package|")) {
+                    Write-Output "Installing $package..."
+                    & choco.exe install $package --yes --ignore-checksums --no-progress
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "Chocolatey exited with code $LASTEXITCODE."
+                    }
+                } else {
+                    Write-Output "$package is already installed. Skipping."
+                }
+
+                if ($Blacklist -contains $package) {
+                    & choco.exe pin add --name $package --yes
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "Chocolatey pin exited with code $LASTEXITCODE."
+                    }
+                }
+            } catch {
+                Add-Failure "Chocolatey package '$package'" $_.Exception.Message
+                Write-Warning "Failed: $package"
+            }
+        }
 }
 
-# Parse command-line arguments
+function Install-PackageFolder([string]$Folder, [string[]]$Blacklist) {
+    if (-not (Test-Path -LiteralPath $Folder -PathType Container)) {
+        return
+    }
+    Get-ChildItem -LiteralPath $Folder -Filter "*.txt" -File |
+        Sort-Object FullName |
+        ForEach-Object { Install-ChocoPackages $_.FullName $Blacklist }
+}
+
+function Invoke-ScriptFolder([string]$Folder) {
+    if (-not (Test-Path -LiteralPath $Folder -PathType Container)) {
+        return
+    }
+    Get-ChildItem -LiteralPath $Folder -Filter "*.ps1" -File |
+        Sort-Object FullName |
+        ForEach-Object { Invoke-ScriptFile $_.FullName }
+}
+
+$options = @{
+    set_password = $null
+    install_sunshine = $null
+    install_common = $null
+    install_dev = $null
+    install_gaming_room = $null
+    install_scripts = $null
+    reboot_after = $null
+    userpw = $null
+    sunshine_uname = $null
+    sunshine_password = $null
+}
+
+$options.userpw = $env:FISHTANK_USERPW
+$options.sunshine_uname = $env:FISHTANK_SUNSHINE_USER
+$options.sunshine_password = $env:FISHTANK_SUNSHINE_PASSWORD
+$postReboot = $args -contains "--post-reboot"
+if ($postReboot) {
+    Unregister-ScheduledTask -TaskName "Fishtank-PostReboot" -Confirm:$false -ErrorAction SilentlyContinue
+}
+if ($options.sunshine_uname -and $options.sunshine_password) {
+    $options.install_sunshine = $true
+}
+
 foreach ($arg in $args) {
     switch -Wildcard ($arg) {
-        "--no-user"            { $options.set_password = $false }
-        "--no-sunshine"        { $options.install_sunshine = $false }
+        "--no-user" { $options.set_password = $false }
+        "--no-sunshine" { $options.install_sunshine = $false }
         "--all" {
             $options.install_common = $true
             $options.install_dev = $true
@@ -40,270 +158,122 @@ foreach ($arg in $args) {
             $options.reboot_after = $true
         }
         "--userpw=*" {
-            $options.userpw = $arg -replace "--userpw=", ""
+            $options.userpw = $arg.Substring(9)
             $options.set_password = $true
         }
         "--sunshine-creds=*" {
-            $creds = $arg -replace "--sunshine-creds=", ""
-            $parts = $creds -split ":", 2
-            if ($parts.Length -eq 2) {
-                $options.sunshine_uname = $parts[0]
-                $options.sunshine_password = $parts[1]
-                $options.install_sunshine = $true
+            $parts = $arg.Substring(18) -split ":", 2
+            if ($parts.Count -ne 2 -or [string]::IsNullOrWhiteSpace($parts[0])) {
+                throw "Sunshine credentials must use --sunshine-creds=username:password."
             }
+            $options.sunshine_uname = $parts[0]
+            $options.sunshine_password = $parts[1]
+            $options.install_sunshine = $true
         }
-        "--common"  { $options.install_common = $true }
-        "--dev"     { $options.install_dev = $true }
+        "--common" { $options.install_common = $true }
+        "--dev" { $options.install_dev = $true }
         "--scripts" { $options.install_scripts = $true }
-        "--gaming"  { $options.install_gaming_room = $true}
+        "--gaming" { $options.install_gaming_room = $true }
         "--restart" { $options.reboot_after = $true }
+        "--post-reboot" { }
     }
 }
 
-if ($options.set_password -eq $null) {
-    $options.set_password = yn_prompt "Set a password for this admin account?"
+if ($null -eq $options.set_password) {
+    $options.set_password = if ($postReboot) { $false } else { Read-YesNo "Set a password for this admin account?" }
 }
-
 if ($options.set_password) {
-    $pw = if ($options.userpw) {
+    $password = if ($null -ne $options.userpw) {
         ConvertTo-SecureString $options.userpw -AsPlainText -Force
     } else {
         Read-Host -AsSecureString -Prompt "Enter a password"
     }
-    $pw2 = if ($options.userpw) {
-        $pw
+    $confirmation = if ($null -ne $options.userpw) {
+        $password
     } else {
         Read-Host -AsSecureString -Prompt "Re-enter the password"
     }
-
-    if ([System.Net.NetworkCredential]::new("", $pw).Password -ne [System.Net.NetworkCredential]::new("", $pw2).Password) {
-        Write-Output "Passwords do not match. Exiting..."
-        exit
+    if ([Net.NetworkCredential]::new("", $password).Password -ne [Net.NetworkCredential]::new("", $confirmation).Password) {
+        throw "Passwords do not match."
     }
-
-    $UserAccount = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name -replace ".*\\", ""
-    $UserAccount | Set-LocalUser -Password $pw
-    Write-Output "Password set successfully."
+    $account = $identity.Name -replace ".*\\", ""
+    Set-LocalUser -Name $account -Password $password
 }
 
-if ($options.install_sunshine -eq $null) {
-    $options.install_sunshine = yn_prompt "Install sunshine software for remote desktop?"
+if ($null -eq $options.install_sunshine) {
+    $options.install_sunshine = if ($postReboot) { $false } else { Read-YesNo "Install Sunshine for remote desktop?" }
 }
+if ($options.install_sunshine) {
+    if (-not $options.sunshine_uname) { $options.sunshine_uname = Read-Host "Enter a username for the Sunshine account" }
+    if (-not $options.sunshine_password) {
+        $securePassword = Read-Host -AsSecureString -Prompt "Enter a password for the Sunshine account"
+        $options.sunshine_password = [Net.NetworkCredential]::new("", $securePassword).Password
+    }
+}
+if ($null -eq $options.install_common) { $options.install_common = if ($postReboot) { $false } else { Read-YesNo "Install common software?" } }
+if ($null -eq $options.install_dev) { $options.install_dev = if ($postReboot) { $false } else { Read-YesNo "Install developer software?" } }
+if ($null -eq $options.install_gaming_room) { $options.install_gaming_room = if ($postReboot) { $true } else { Read-YesNo "Install gaming-room software?" } }
+if ($null -eq $options.install_scripts) { $options.install_scripts = if ($postReboot) { $true } else { Read-YesNo "Install scripts?" } }
+if ($null -eq $options.reboot_after) { $options.reboot_after = $false }
+
+Invoke-ScriptFile (Get-RepoPath "choco-installer.ps1") | Out-Null
+$blacklistPath = Get-RepoPath "apps/autoupdate-blacklist.txt"
+$blacklist = if (Test-Path -LiteralPath $blacklistPath) {
+    Get-Content -LiteralPath $blacklistPath | Where-Object { $_ -notmatch "^\s*#" -and $_ -match "\S" }
+} else { @() }
+
+Invoke-ScriptFolder (Get-RepoPath "scripts/remove-bloat")
+Install-PackageFolder (Get-RepoPath "apps/base") $blacklist
 
 if ($options.install_sunshine) {
-    if (-not $options.sunshine_uname) {
-        $options.sunshine_uname = Read-Host -Prompt "Enter a username for the sunshine account"
-    }
-    $secure_pw = if ($options.sunshine_password) {
-        ConvertTo-SecureString $options.sunshine_password -AsPlainText -Force
-    } else {
-        Read-Host -AsSecureString -Prompt "Enter a password for the sunshine account"
-    }
-    $options.sunshine_password = [System.Net.NetworkCredential]::new("", $secure_pw).Password
-}
-
-if ($options.install_common -eq $null) { $options.install_common = yn_prompt "Install common software?" }
-if ($options.install_dev -eq $null) { $options.install_dev = yn_prompt "Install developer software?" }
-if ($options.install_gaming_room -eq $null) { $options.install_gaming_room = yn_prompt "Install gaming room software?" }
-if ($options.install_scripts -eq $null) { $options.install_scripts = yn_prompt "Install scripts? (Debloat, auto-update, etc.)" }
-if ($options.reboot_after -eq $null) { $options.reboot_after = yn_prompt "Reboot after installation?" }
-
-Unblock-File choco-installer.ps1
-. .\choco-installer.ps1
-
-# Upgrade & update winget
-winget source reset
-winget source update
-winget upgrade winget
-
-# Load blacklist entries (packages that should be pinned)
-$blacklistFile = "apps/autoupdate-blacklist.txt"
-if (Test-Path $blacklistFile) {
-    $blacklist = Get-Content $blacklistFile | Where-Object { $_ -notmatch "^#|^$" }
-} else {
-    $blacklist = @()
-}
-
-function install_choco_packages($file) {
-    Write-Output "Installing packages from $file..."
-
-    Get-Content $file | Where-Object {
-        ($_ -notmatch "^#|^$") -and ($_ -match "\S")
-    } | ForEach-Object {
-        $packageName = $_ -replace "#.*", ""
-        $packageName = $packageName.Trim()
-
-        # Check if package is already installed
-        $isInstalled = choco list --local-only | Select-String "^$packageName\s"
-
-        if (-not $isInstalled) {
-            Write-Output "Installing $packageName..."
-            choco install -y --ignore-checksums $packageName
-        } else {
-            Write-Output "$packageName is already installed. Skipping installation..."
-        }
-
-        # If the package is in the blacklist, pin it
-        if ($blacklist -contains $packageName) {
-            Write-Output "Pinning $packageName to suppress upgrades..."
-            choco pin add -n $packageName
-        }
+    try {
+        & choco.exe install sunshine --yes --no-progress
+        if ($LASTEXITCODE -ne 0) { throw "Chocolatey exited with code $LASTEXITCODE." }
+        $sunshine = "C:\Program Files\Sunshine\sunshine.exe"
+        if (-not (Test-Path -LiteralPath $sunshine)) { throw "Sunshine was not found at $sunshine." }
+        $sunshineArgs = @("--creds", $options.sunshine_uname, $options.sunshine_password)
+        Start-Process -FilePath $sunshine -ArgumentList $sunshineArgs -WindowStyle Hidden -Wait
+        Stop-Process -Name "sunshine" -Force -ErrorAction SilentlyContinue
+        Start-Process -FilePath $sunshine -ArgumentList $sunshineArgs -WindowStyle Hidden
+    } catch {
+        Add-Failure "Sunshine" $_.Exception.Message
+        Write-Warning "Sunshine setup failed."
     }
 }
-
-function install_choco_packages_recursive($directory) {
-    Write-Output "Processing package files in $directory..."
-
-    if (Test-Path $directory) {
-        # Get all .txt files in the directory
-        Get-ChildItem -Path $directory -Filter "*.txt" | ForEach-Object {
-            Write-Output "Installing packages from $($_.FullName)..."
-            install_choco_packages $_.FullName
-        }
-    } else {
-        Write-Output "Directory $directory does not exist. Skipping..."
-    }
-}
-
-function execute_scripts_recursive($directory) {
-    Write-Output "Executing scripts in $directory..."
-
-    if (Test-Path $directory) {
-        # Get all .ps1 script files in the directory
-        Get-ChildItem -Path $directory -Filter "*.ps1" | ForEach-Object {
-            Write-Output "Running script: $($_.FullName)..."
-            Unblock-File -Path $_.FullName
-            & $_.FullName
-        }
-    } else {
-        Write-Output "Directory $directory does not exist. Skipping..."
-    }
-}
-
-function Start-InstallJob($appFolder, $scriptFolder = $null, $blacklist = @()) {
-    $global:jobs = @()
-
-    if ($appFolder -and (Test-Path $appFolder)) {
-        Get-ChildItem -Path $appFolder -Filter "*.txt" | ForEach-Object {
-            Get-Content $_.FullName | Where-Object { ($_ -notmatch "^#|^$") -and ($_ -match "\S") } | ForEach-Object {
-                $package = $_ -replace "#.*", ""
-                $package = $package.Trim()
-
-                $global:jobs += Start-Job -ScriptBlock {
-                    param($package, $blacklist, $scriptRoot)
-                    Set-Location -Path $scriptRoot
-                    if (-not (choco list --local-only | Select-String "^$package\s")) {
-                        Write-Output "Installing $package..."
-                        choco install -y --ignore-checksums $package
-                    } else {
-                        Write-Output "$package is already installed. Skipping..."
-                    }
-
-                    if ($blacklist -contains $package) {
-                        Write-Output "Pinning $package..."
-                        choco pin add -n $package
-                    }
-                } -ArgumentList $package, $blacklist, $PSScriptRoot
-            }
-        }
-    }
-
-    if ($scriptFolder -and (Test-Path $scriptFolder)) {
-        $global:jobs += Start-Job -ScriptBlock {
-            param($folder, $scriptRoot)
-            Set-Location -Path $scriptRoot
-            Get-ChildItem -Path $folder -Filter "*.ps1" | ForEach-Object {
-                Write-Output "Running script: $($_.FullName)"
-                Unblock-File -Path $_.FullName
-                & $_.FullName
-            }
-        } -ArgumentList $scriptFolder, $PSScriptRoot
-    }
-
-    return $global:jobs
-}
-
-execute_scripts_recursive "scripts/remove-bloat"
-
-$jobs = @()
-$jobs += Start-InstallJob -appFolder "apps/base" -scriptFolder $null -blacklist $blacklist
-if ($jobs.Count -gt 0) {
-    Write-Output "Waiting for base installation jobs to complete..."
-    $jobs | ForEach-Object { Wait-Job $_ }
-    $jobs | ForEach-Object { $jobOutput = Receive-Job $_; Write-Output $jobOutput; Remove-Job $_ }
-}
-
-if ($options.install_sunshine) {
-    choco install -y sunshine
-    $sunshine_binary = "C:\Program Files\Sunshine\sunshine.exe"
-    $sunshine_creds = "--creds `"$sunshine_uname`" `"$sunshine_password_clean`""
-    Start-Process -FilePath $sunshine_binary -ArgumentList $sunshine_creds -WindowStyle Hidden -Wait
-    Stop-Process -Name "sunshine" -Force -ErrorAction SilentlyContinue
-    Start-Process -FilePath $sunshine_binary -ArgumentList $sunshine_creds -WindowStyle Hidden
-
-    $firewall_rules = @(
-        @{ Name = "Sunshine TCP 47984"; Port = 47984; Protocol = "TCP" },
-        @{ Name = "Sunshine TCP 47989"; Port = 47989; Protocol = "TCP" },
-        @{ Name = "Sunshine TCP 48010"; Port = 48010; Protocol = "TCP" },
-        @{ Name = "Sunshine UDP 47998"; Port = 47998; Protocol = "UDP" },
-        @{ Name = "Sunshine UDP 47999"; Port = 47999; Protocol = "UDP" },
-        @{ Name = "Sunshine UDP 48000"; Port = 48000; Protocol = "UDP" }
-    )
-
-    foreach ($rule in $firewall_rules) {
-        $ruleName = $rule.Name
-        $port = $rule.Port
-        $protocol = $rule.Protocol
-
-        # Check if the rule already exists
-        $existingRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
-
-        if (-not $existingRule) {
-            Write-Output "Creating firewall rule: $ruleName for port $port ($protocol)..."
-            New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol $protocol -LocalPort $port -Profile Any
-        } else {
-            Write-Output "Firewall rule: $ruleName already exists. Skipping..."
-        }
-    }
-}
-
-$jobs = @()
 
 if ($options.install_common) {
-    $jobs += Start-InstallJob "apps/common" "scripts/common" $blacklist
+    Install-PackageFolder (Get-RepoPath "apps/common") $blacklist
+    Invoke-ScriptFolder (Get-RepoPath "scripts/common")
 }
-
 if ($options.install_dev) {
-    $jobs += Start-InstallJob "apps/dev" "scripts/dev" $blacklist
+    Install-PackageFolder (Get-RepoPath "apps/dev") $blacklist
+    Invoke-ScriptFolder (Get-RepoPath "scripts/dev")
 }
-
 if ($options.install_gaming_room) {
-    $jobs += Start-InstallJob "apps/gaming-room" "scripts/gaming-room" $blacklist
+    Install-PackageFolder (Get-RepoPath "apps/gaming-room") $blacklist
+    Invoke-ScriptFolder (Get-RepoPath "scripts/gaming-room")
 }
-
-if ($jobs.Count -gt 0) {
-    Write-Output "Waiting for installation jobs to complete..."
-    $jobs | ForEach-Object { Wait-Job $_ }
-    $jobs | ForEach-Object { $jobOutput = Receive-Job $_; Write-Output $jobOutput; Remove-Job $_ }
-}
-
-if ($options.install_scripts) {
-    $jobs = @()
-    $jobs += Start-InstallJob $null "scripts"
-    if ($jobs.Count -gt 0) {
-        Write-Output "Waiting for scripts to complete..."
-        $jobs | ForEach-Object { Wait-Job $_ }
-        $jobs | ForEach-Object { $jobOutput = Receive-Job $_; Write-Output $jobOutput; Remove-Job $_ }
-    }
-}
+if ($options.install_scripts) { Invoke-ScriptFolder (Get-RepoPath "scripts") }
 
 Write-Output "Fishtank is set up!"
-
 if ($options.reboot_after) {
+    try {
+        $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" `
+            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" --post-reboot"
+        $taskTrigger = New-ScheduledTaskTrigger -AtLogOn -User $identity.Name
+        $taskPrincipal = New-ScheduledTaskPrincipal -UserId $identity.Name -LogonType InteractiveToken -RunLevel Highest
+        Register-ScheduledTask -TaskName "Fishtank-PostReboot" -Action $taskAction `
+            -Trigger $taskTrigger -Principal $taskPrincipal -Force | Out-Null
+        Write-Output "A post-reboot user setup pass was scheduled."
+    } catch {
+        Add-Failure "Post-reboot setup" $_.Exception.Message
+        Write-Warning "Could not schedule the post-reboot setup pass."
+    }
+    Write-Checklist
     Write-Output "Rebooting in 15 seconds..."
     Start-Sleep -Seconds 15
     Restart-Computer -Force
+} else {
+    Write-Checklist
+    pause
 }
-
-# If we aren't restarting out, we can just pause the script to let the user see the output
-pause

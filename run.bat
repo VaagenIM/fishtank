@@ -1,28 +1,23 @@
 @echo off
+setlocal EnableExtensions
 
-:: Set CWD to the script's directory
-cd /d "%~dp0/fishtank"
+set "root=%~dp0fishtank"
+set "script=%root%\run.ps1"
 
-:: Check for admin rights
-NET SESSION >nul 2>&1
-IF %ERRORLEVEL% NEQ 0 (
-    echo Requesting administrative privileges...
-    set args=%*
-    if defined args (
-        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-            "Start-Process -FilePath '%~f0' -Verb RunAs -ArgumentList @('%args%')"
-    ) else (
-        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-            "Start-Process -FilePath '%~f0' -Verb RunAs"
-    )
-    exit
+if not exist "%script%" (
+    echo Could not find "%script%".
+    exit /b 1
 )
 
-:: Unblock the script
-powershell -Command "Unblock-File -Path run.ps1"
+pushd "%root%" || exit /b 1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+    "Unblock-File -LiteralPath '%script%' -ErrorAction SilentlyContinue"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%script%" %*
+set "exitCode=%ERRORLEVEL%"
+popd
 
-:: Run the PowerShell script with passed arguments
-powershell -ExecutionPolicy Unrestricted -File run.ps1 %*
-
-echo Script execution completed.
+if not "%exitCode%"=="0" (
+    echo Fishtank stopped with exit code %exitCode%.
+)
 pause
+exit /b %exitCode%

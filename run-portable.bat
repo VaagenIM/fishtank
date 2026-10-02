@@ -1,30 +1,46 @@
 @echo off
+setlocal EnableExtensions DisableDelayedExpansion
 
-:: Define paths
 set "zipPath=%USERPROFILE%\Desktop\fishtank.zip"
 set "extractPath=%USERPROFILE%\Desktop\fishtank-main"
+set "downloadUrl=https://github.com/VaagenIM/fishtank/archive/refs/heads/main.zip"
 
-:: Delete old fishtank-main if it exists
-if exist "%extractPath%" (
-    echo Deleting existing folder: %extractPath%
-    rmdir /s /q "%extractPath%"
+if not exist "%SystemRoot%\System32\curl.exe" (
+    echo curl.exe is required to download Fishtank.
+    exit /b 1
 )
 
-:: Download the ZIP file
-echo Downloading fishtank.zip...
-curl -L -o "%zipPath%" "https://github.com/VaagenIM/fishtank/archive/refs/heads/main.zip"
+if exist "%extractPath%" (
+    echo Removing the previous Fishtank deployment...
+    rmdir /s /q "%extractPath%"
+    if exist "%extractPath%" (
+        echo Could not remove "%extractPath%".
+        exit /b 1
+    )
+)
 
-:: Extract the ZIP file to the Desktop
-echo Extracting the ZIP file...
-powershell -Command "Expand-Archive -Path '%zipPath%' -DestinationPath '%USERPROFILE%\Desktop'"
+echo Downloading Fishtank...
+curl.exe --fail --location --silent --show-error --output "%zipPath%" "%downloadUrl%"
+if errorlevel 1 (
+    echo Download failed.
+    exit /b 1
+)
 
-:: Remove the zip file
-echo Cleaning up...
-del "%zipPath%"
+echo Extracting Fishtank...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+    "Expand-Archive -LiteralPath '%zipPath%' -DestinationPath '%USERPROFILE%\Desktop' -Force"
+if errorlevel 1 (
+    echo Extraction failed.
+    del /q "%zipPath%" 2>nul
+    exit /b 1
+)
 
-:: Launch run.bat without any CLI arguments (user will be prompted)
-echo Running run.bat...
-start "" cmd /k "%extractPath%\run.bat"
+del /q "%zipPath%"
+if not exist "%extractPath%\run.bat" (
+    echo The downloaded archive did not contain "%extractPath%\run.bat".
+    exit /b 1
+)
 
-echo Deployment completed.
-exit
+echo Starting Fishtank...
+start "" "%ComSpec%" /d /k call "%extractPath%\run.bat"
+exit /b 0

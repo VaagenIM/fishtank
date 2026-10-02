@@ -1,23 +1,38 @@
-choco install -y bulk-crap-uninstaller
-# Define the path to the .bcul uninstall list (in the same directory as the script)
-$bculFile = Join-Path -Path $PSScriptRoot -ChildPath "uninstall.bcul"
+$ErrorActionPreference = "Stop"
+$checklistPath = Join-Path ([Environment]::GetFolderPath("Desktop")) "Fishtank-install-checklist.txt"
 
-# Define path to BCU-console.exe installed via Chocolatey
-$BCUConsolePath = "C:\Program Files\BCUninstaller\win-x64\BCU-console.exe"
+try {
+    $bculFile = Join-Path -Path $PSScriptRoot -ChildPath "uninstall.bcul"
+    if (-not (Test-Path -LiteralPath $bculFile -PathType Leaf)) {
+        throw "Uninstall list not found: $bculFile"
+    }
 
-# Validate BCU-console exists
-if (-not (Test-Path $BCUConsolePath)) {
-    Write-Error "BCU-console.exe not found at $BCUConsolePath. Please verify the installation."
-    exit 1
+    if (-not (Get-Command choco.exe -ErrorAction SilentlyContinue)) {
+        throw "Chocolatey is required to install Bulk Crap Uninstaller."
+    }
+
+    & choco.exe install bulk-crap-uninstaller --yes --no-progress
+    if ($LASTEXITCODE -ne 0) {
+        throw "Bulk Crap Uninstaller installation failed with exit code $LASTEXITCODE."
+    }
+
+    $installRoot = Join-Path ${env:ProgramFiles} "BCUninstaller"
+    $bcuConsole = Get-ChildItem -LiteralPath $installRoot -Filter "BCU-console.exe" -File -Recurse -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $bcuConsole) {
+        throw "BCU-console.exe was not found below $installRoot."
+    }
+
+    Write-Host "Running BCU-console with uninstall list: $bculFile"
+    & $bcuConsole.FullName "uninstall" $bculFile "/Q" "/U" "/J=VeryGood"
+    if ($LASTEXITCODE -ne 0) {
+        throw "BCU-console failed with exit code $LASTEXITCODE."
+    }
+
+    Write-Output "Finished uninstalling applications listed in $bculFile."
+} catch {
+    $entry = "- [ ] BCU uninstall :: $($_.Exception.Message)"
+    Add-Content -LiteralPath $checklistPath -Value $entry -Encoding UTF8
+    Write-Error $_
+    throw
 }
-
-# Validate the .bcul file exists
-if (-not (Test-Path $bculFile)) {
-    Write-Error "Uninstall list not found at $bculFile. Please ensure 'uninstall.bcul' exists in the script directory."
-    exit 1
-}
-
-Write-Host "Running BCU-console with uninstall list: $bculFile"
-& $BCUConsolePath uninstall `"$bculFile`" /Q /U /J=VeryGood
-
-Write-Output "Finished uninstalling applications listed in $bculFile."

@@ -1,0 +1,40 @@
+name: Publish Latest release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish launcher assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Calculate calendar version
+        id: version
+        shell: bash
+        # SemVer numeric identifiers cannot contain leading zeroes.
+        run: echo "version=$(date -u +'%Y.%-m.%-d')" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Latest
+          body: |
+            Latest Fishtank launcher scripts.
+
+            Version: `v${{ steps.version.outputs.version }}`
+          files: |
+            fish.bat
+            run-portable.bat
+          make_latest: true
+          fail_on_unmatched_files: true
+          overwrite_files: true

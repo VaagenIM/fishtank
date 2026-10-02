@@ -1,5 +1,15 @@
-# Set network mode to Private
-Set-NetConnectionProfile -InterfaceAlias "Ethernet" -NetworkCategory Private
+$ErrorActionPreference = "Stop"
 
-# Open the port for "ping"
-New-NetFirewallRule -DisplayName "Allow ICMPv4-In" -Direction Inbound -Protocol ICMPv4 -Action Allow -LocalPort Any -Profile Any
+# Apply the profile to every connected Ethernet adapter; interface names vary by
+# hardware and localized Windows installations.
+Get-NetConnectionProfile |
+    Where-Object { $_.IPv4Connectivity -ne "Disconnected" } |
+    ForEach-Object {
+        Set-NetConnectionProfile -InterfaceIndex $_.InterfaceIndex -NetworkCategory Private
+    }
+
+$ruleName = "Allow ICMPv4-In"
+if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol ICMPv4 `
+        -Action Allow -Profile Private | Out-Null
+}
