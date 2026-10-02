@@ -1,9 +1,9 @@
-# Check if DaVinci is already installed, if it is, skip the installation
-$installed = Get-Command "C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe" -ErrorAction SilentlyContinue
-if ($installed) {
+if (Test-Path -LiteralPath "C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe") {
     Write-Output "DaVinci Resolve is already installed. Skipping installation..."
-    exit
+    return
 }
+
+$ErrorActionPreference = "Stop"
 
 # Install and configure DaVinci Resolve
 $davinci_filename = "DaVinci_Resolve_19.1.4_Windows"
@@ -53,10 +53,13 @@ if ($msiFound) {
     $msiPath = $msiFound.FullName
     Write-Output "Found MSI installer at $msiPath. Launching silent MSI installation..."
     $logFile = "$download_folder\ResolveInstall.log"
-    Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /qn /log `"$logFile`" ALLUSERS=1 REBOOT=ReallySuppress" -Wait
+    $msiProcess = Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /qn /log `"$logFile`" ALLUSERS=1 REBOOT=ReallySuppress" -Wait -PassThru
+    if ($msiProcess.ExitCode -ne 0) {
+        throw "DaVinci Resolve MSI installation failed with exit code $($msiProcess.ExitCode)."
+    }
     Write-Output "MSI installation completed."
 } else {
-    Write-Error "ResolveInstaller.msi was not found in $tempFolder within $maxWait seconds."
+    throw "ResolveInstaller.msi was not found in $tempFolder within $maxWait seconds."
 }
 
 # Close the original installer if it's still running

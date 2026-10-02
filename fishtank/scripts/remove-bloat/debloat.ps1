@@ -39,8 +39,10 @@ Get-WindowsCapability -Online -Name XPS.Viewer* | Remove-WindowsCapability -Onli
 Get-WindowsOptionalFeature -Online -FeatureName WindowsMediaPlayer | Disable-WindowsOptionalFeature -Online -Remove # Remove Windows Media Player
 Get-WindowsOptionalFeature -Online -FeatureName Internet-Explorer-Optional-* | Disable-WindowsOptionalFeature -Online -Remove -NoRestart # Remove Internet Explorer
 
-# Get all user SIDs
-$userSIDs = Get-ChildItem "Registry::HKEY_USERS" | Where-Object { $_.Name -notmatch "S-1-5-18" } | Select-Object -ExpandProperty Name
+# Get loaded profiles for real user accounts, excluding service and default hives.
+$userSIDs = Get-ChildItem "Registry::HKEY_USERS" |
+    Where-Object { $_.PSChildName -match "^S-1-5-21-\d+-\d+-\d+-\d+$" } |
+    Select-Object -ExpandProperty PSChildName
 
 # Disable fast start-up
 reg.exe ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled /t REG_DWORD /d "0" /f
@@ -65,7 +67,7 @@ reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System" /v E
 foreach ($userSID in $userSIDs) {
     Write-Output "Applying user-specific settings for user SID: $userSID"
 
-    $userHive = "$userSID\SOFTWARE\Microsoft"
+    $userHive = "HKEY_USERS\$userSID\SOFTWARE\Microsoft"
 
     # Disable SIUF (System Initiated User Feedback) (per user)
     reg.exe ADD "$userHive\Siuf\Rules" /v NumberOfSIUFInPeriod /t REG_DWORD /d "0" /f

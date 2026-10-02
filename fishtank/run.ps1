@@ -36,6 +36,12 @@ function Write-Checklist {
     Write-Output "Installation checklist: $checklistPath"
 }
 
+trap {
+    Add-Failure "Unhandled runner error" $_.Exception.Message
+    Write-Warning "An unexpected error was recorded; continuing with the remaining steps."
+    continue
+}
+
 function Read-YesNo([string]$Prompt) {
     $response = Read-Host "$Prompt (Y/n)"
     return [string]::IsNullOrWhiteSpace($response) -or $response -match "^(?i)y(es)?$"
@@ -81,9 +87,10 @@ function Install-ChocoPackages([string]$File, [string[]]$Blacklist) {
         ForEach-Object {
             $package = ($_ -replace "#.*", "").Trim()
             try {
-                if (-not (choco.exe list --local-only --limit-output | Select-String -SimpleMatch "$package|")) {
+                $packagePattern = "^{0}\|" -f [regex]::Escape($package)
+                if (-not (choco.exe list --local-only --limit-output | Select-String -Pattern $packagePattern)) {
                     Write-Output "Installing $package..."
-                    & choco.exe install $package --yes --ignore-checksums --no-progress
+                    & choco.exe install $package --yes --no-progress
                     if ($LASTEXITCODE -ne 0) {
                         throw "Chocolatey exited with code $LASTEXITCODE."
                     }
@@ -108,18 +115,28 @@ function Install-PackageFolder([string]$Folder, [string[]]$Blacklist) {
     if (-not (Test-Path -LiteralPath $Folder -PathType Container)) {
         return
     }
-    Get-ChildItem -LiteralPath $Folder -Filter "*.txt" -File |
-        Sort-Object FullName |
-        ForEach-Object { Install-ChocoPackages $_.FullName $Blacklist }
+    try {
+        Get-ChildItem -LiteralPath $Folder -Filter "*.txt" -File |
+            Sort-Object FullName |
+            ForEach-Object { Install-ChocoPackages $_.FullName $Blacklist }
+    } catch {
+        Add-Failure $Folder $_.Exception.Message
+        Write-Warning "Could not process package folder: $Folder"
+    }
 }
 
 function Invoke-ScriptFolder([string]$Folder) {
     if (-not (Test-Path -LiteralPath $Folder -PathType Container)) {
         return
     }
-    Get-ChildItem -LiteralPath $Folder -Filter "*.ps1" -File |
-        Sort-Object FullName |
-        ForEach-Object { Invoke-ScriptFile $_.FullName }
+    try {
+        Get-ChildItem -LiteralPath $Folder -Filter "*.ps1" -File |
+            Sort-Object FullName |
+            ForEach-Object { Invoke-ScriptFile $_.FullName }
+    } catch {
+        Add-Failure $Folder $_.Exception.Message
+        Write-Warning "Could not process script folder: $Folder"
+    }
 }
 
 $options = @{

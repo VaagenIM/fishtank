@@ -23,8 +23,7 @@ Set-Content -Path $ScriptPath -Value $ScriptContent -Force
 $TaskName = "MapDrives"
 $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ScriptPath`""
 $Trigger = New-ScheduledTaskTrigger -AtLogOn
-$UsersGroup = Get-LocalGroup | Where-Object { $_.SID -eq "S-1-5-32-545" }
-$Principal = New-ScheduledTaskPrincipal -GroupId $UsersGroup.Name
+$Principal = New-ScheduledTaskPrincipal -GroupId "S-1-5-32-545"
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -StartWhenAvailable -Hidden
 
 # Remove if exists

@@ -1,7 +1,9 @@
 Write-Output "Configuring Explorer..."
 
-# Get all user SIDs
-$userSIDs = Get-ChildItem "Registry::HKEY_USERS" | Where-Object { $_.Name -notmatch "S-1-5-18" } | Select-Object -ExpandProperty Name
+# Get loaded profiles for real user accounts, excluding service and default hives.
+$userSIDs = Get-ChildItem "Registry::HKEY_USERS" |
+    Where-Object { $_.PSChildName -match "^S-1-5-21-\d+-\d+-\d+-\d+$" } |
+    Select-Object -ExpandProperty PSChildName
 
 reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v Hidden /t REG_DWORD /d "1" /f
 reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideDrivesWithNoMedia /t REG_DWORD /d "0" /f
@@ -19,7 +21,7 @@ reg.exe ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Polici
 foreach ($userSID in $userSIDs) {
     Write-Output "Applying user-specific settings for user SID: $userSID"
 
-    $userHive = "$userSID\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    $userHive = "HKEY_USERS\$userSID\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
 
     # Shows hidden files in file explorer (per user)
     reg.exe ADD "$userHive" /v Hidden /t REG_DWORD /d "1" /f

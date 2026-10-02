@@ -1,13 +1,19 @@
-# Enable Developer Mode
-Write-Output "Enabling Developer Mode..."
-reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
-
 $ErrorActionPreference = "Stop"
 
+# Enable Developer Mode
+Write-Output "Enabling Developer Mode..."
+reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not enable Developer Mode."
+}
+
 # https://chocolatey.org/install
-if (Get-Command choco -ErrorAction SilentlyContinue) {
+if (Get-Command choco.exe -ErrorAction SilentlyContinue) {
     Write-Output "Chocolatey is installed. Updating Chocolatey..."
-    choco upgrade chocolatey -y
+    & choco.exe upgrade chocolatey --yes --no-progress
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not update Chocolatey."
+    }
 } else {
     Write-Output "Chocolatey is not installed. Installing Chocolatey..."
     Set-ExecutionPolicy Bypass -Scope Process -Force

@@ -7,19 +7,19 @@ Set-WinUILanguageOverride -Language en-US
 # Set country/region to Norway
 Set-WinHomeLocation -GeoId 177  # 177 = Norway
 
-# Set the input method (keyboard layout) to Norwegian
-$LanguageList = Get-WinUserLanguageList
-$LanguageList.Add("nb-NO") # Add Norwegian language (for display purposes)
-Set-WinUserLanguageList $LanguageList -Force
+$languageList = Get-WinUserLanguageList
+if (-not ($languageList.LanguageTag -contains "nb-NO")) {
+    $languageList.Add("nb-NO")
+}
 
 # Set the time zone to Europe/Oslo
 Set-TimeZone -Id "W. Europe Standard Time"
 
-# Set the keyboard layout to Norwegian
-$LanguageList = Get-WinUserLanguageList
-$LanguageList[0].InputMethodTips.Clear() # Clear any existing input methods
-$LanguageList[0].InputMethodTips.Add("0409:00000414")  # Norwegian Keyboard Layout
-Set-WinUserLanguageList $LanguageList -Force
+# Set the keyboard layout to Norwegian on the Norwegian language entry.
+$norwegian = $languageList | Where-Object LanguageTag -eq "nb-NO"
+$norwegian.InputMethodTips.Clear()
+$norwegian.InputMethodTips.Add("0414:00000414")
+Set-WinUserLanguageList $languageList -Force
 
 # Notify user
 Write-Host "Language, keyboard, region, and timezone settings have been updated."
